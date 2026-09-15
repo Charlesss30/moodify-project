@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moodify</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Lucide icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- LOGIN -->
+    <section id="login-view" class="view auth-view">
+      <div class="auth-card">
+        <div class="brand-icon">
+          <i data-lucide="sparkles"></i>
+        </div>
+
+        <h1>Welcome to Moodify</h1>
+        <p class="subtitle">
+          Sign in to analyze your mood and discover matched movies &amp; music
+        </p>
+
+        <div id="login-general-error" class="alert alert-danger hidden"></div>
+        <div id="login-success" class="alert alert-success hidden"></div>
+
+        <form id="login-form" novalidate>
+          <label for="login-identifier">Email / Tên đăng nhập</label>
+          <div class="input-wrap" id="login-identifier-wrap">
+            <i data-lucide="mail"></i>
+            <input
+              id="login-identifier"
+              type="text"
+              placeholder="alex.designer@example.com"
+              autocomplete="username"
+            >
+          </div>
+          <div id="login-identifier-error" class="field-error"></div>
+
+          <label for="login-password">Mật khẩu</label>
+          <div class="input-wrap" id="login-password-wrap">
+            <i data-lucide="lock"></i>
+            <input
+              id="login-password"
+              type="password"
+              placeholder="••••••••••••"
+              autocomplete="current-password"
+            >
+            <button type="button" class="icon-btn input-action" id="login-toggle-password" aria-label="Hiện mật khẩu">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
+          <div id="login-password-error" class="field-error"></div>
+
+          <div class="row between small-row">
+            <label class="check-label">
+              <input id="remember-me" type="checkbox" checked>
+              <span>Remember me</span>
+            </label>
+            <button type="button" class="text-link">Forgot password?</button>
+          </div>
+
+          <button class="primary-btn" type="submit">Sign In</button>
+        </form>
+
+        <div class="auth-footer">
+          <span>Don't have an account?</span>
+          <button type="button" class="text-link strong" data-nav="register">Sign Up</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- REGISTER -->
+    <section id="register-view" class="view auth-view hidden">
+      <div class="auth-card register-card">
+        <button type="button" class="back-btn" data-nav="login" aria-label="Quay lại">
+          <i data-lucide="arrow-left"></i>
+        </button>
+
+        <h1>Create Account</h1>
+        <p class="subtitle">
+          Personalize your entertainment journey with AI
+        </p>
+
+        <div id="register-success" class="alert alert-success hidden">
+          <i data-lucide="check-circle-2"></i>
+          <span id="register-success-text"></span>
+        </div>
+
+        <form id="register-form" novalidate>
+          <label for="register-name">Full Name</label>
+          <div class="input-wrap" id="register-name-wrap">
+            <i data-lucide="user"></i>
+            <input id="register-name" type="text" placeholder="Alex Morgan" autocomplete="name">
+          </div>
+          <div id="register-name-error" class="field-error"></div>
+
+          <label for="register-email">Email address</label>
+          <div class="input-wrap" id="register-email-wrap">
+            <i data-lucide="mail"></i>
+            <input id="register-email" type="email" placeholder="alex.designer@example.com" autocomplete="email">
+          </div>
+          <div id="register-email-error" class="field-error"></div>
+
+          <label for="register-password">Password</label>
+          <div class="input-wrap" id="register-password-wrap">
+            <i data-lucide="lock"></i>
+            <input id="register-password" type="password" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password">
+            <button type="button" class="icon-btn input-action" id="register-toggle-password" aria-label="Hiện mật khẩu">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
+          <div id="register-password-error" class="field-error"></div>
+
+          <label for="register-confirm">Confirm Password</label>
+          <div class="input-wrap" id="register-confirm-wrap">
+            <i data-lucide="lock"></i>
+            <input id="register-confirm" type="password" placeholder="Nhập lại mật khẩu" autocomplete="new-password">
+            <button type="button" class="icon-btn input-action" id="register-toggle-confirm" aria-label="Hiện mật khẩu">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
+          <div id="register-confirm-error" class="field-error"></div>
+
+          <label class="check-label terms-row">
+            <input id="agree-terms" type="checkbox">
+            <span>Tôi đồng ý với Điều khoản Dịch vụ &amp; Chính sách Bảo mật</span>
+          </label>
+
+          <button class="primary-btn" id="register-submit" type="submit" data-nav="login" disabled>
+            Create Account
+          </button>
+        </form>
+
+        <div class="auth-footer">
+          <span>Already have an account?</span>
+          <button type="button" class="text-link strong" data-nav="login">Sign In</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOME -->
+    <section id="home-view" class="view hidden">
+      <div class="home-shell">
+
+        <header class="home-header">
+          <div class="user-block">
+            <img
+              class="avatar"
+              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop"
+              alt="Avatar"
+            >
+            <div>
+              <div class="greeting">Xin chào <span id="home-role">[NguoiDung]</span>,</div>
+              <div class="username" id="home-name">Alex Morgan</div>
+            </div>
+          </div>
+
+          <button id="logout-btn" class="icon-btn header-logout" aria-label="Đăng xuất">
+            <i data-lucide="log-out"></i>
+          </button>
+        </header>
+
+        <main class="home-content">
+          <h2>How are you feeling today?</h2>
+
+          <section class="mood-card">
+            <div class="mood-title">
+              <i data-lucide="sparkles"></i>
+              <span>AI Mood Analysis</span>
+            </div>
+
+            <textarea id="mood-input" rows="3" placeholder="Tell me how you're feeling..."></textarea>
+
+            <div class="action-row">
+              <button id="analyze-btn" class="small-primary-btn">
+                Analyze Mood
+              </button>
+            </div>
+
+            <div id="mood-result" class="mood-result hidden"></div>
+          </section>
+        </main>
+
+        <nav class="bottom-nav" aria-label="Main navigation">
+          <button class="nav-item active" data-tab="home">
+            <i data-lucide="home"></i>
+            <span>Home</span>
+          </button>
+          <button class="nav-item" data-tab="discover">
+            <i data-lucide="search"></i>
+            <span>Discover</span>
+          </button>
+          <button class="nav-item" data-tab="history">
+            <i data-lucide="clock"></i>
+            <span>History</span>
+          </button>
+          <button class="nav-item" data-tab="profile">
+            <i data-lucide="user"></i>
+            <span>Profile</span>
+          </button>
+        </nav>
+      </div>
+    </section>
+
+    <!-- LOGOUT MODAL -->
+    <div id="logout-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-card">
+        <div class="danger-icon">
+          <i data-lucide="log-out"></i>
+        </div>
+        <h3>Xác nhận đăng xuất</h3>
+        <p>Bạn có chắc chắn muốn kết thúc phiên làm việc để bảo mật tài khoản cá nhân?</p>
+
+        <div class="modal-actions">
+          <button id="cancel-logout" class="secondary-btn">Hủy</button>
+          <button id="confirm-logout" class="danger-btn">Đăng xuất</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

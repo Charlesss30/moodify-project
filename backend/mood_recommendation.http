@@ -1,0 +1,6 @@
+@mood_recommendation_HostAddress = http://localhost:5170
+
+GET {{mood_recommendation_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

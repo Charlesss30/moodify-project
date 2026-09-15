@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moodify Admin</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="admin-header">
+      <div>
+        <p class="eyebrow">MOODIFY / ADMIN</p>
+        <h1>Trang quản trị</h1>
+        <p id="admin-user" class="muted"></p>
+      </div>
+      <button id="logout-button" class="outline-button" type="button">Đăng xuất</button>
+    </header>
+
+    <section class="stats-grid" aria-label="Thống kê">
+      <article class="stat-card"><span>Thể loại</span><strong id="genre-count">-</strong></article>
+      <article class="stat-card"><span>Phim</span><strong id="movie-count">-</strong></article>
+      <article class="stat-card"><span>Âm nhạc</span><strong id="music-count">-</strong></article>
+    </section>
+
+    <section class="content-grid">
+      <article class="panel">
+        <div class="panel-heading"><h2>Thể loại</h2><button class="refresh-button" data-refresh="genres" type="button">Làm mới</button></div>
+        <p id="genres-error" class="error-message"></p>
+        <ul id="genres-list" class="data-list"><li>Đang tải...</li></ul>
+      </article>
+      <article class="panel">
+        <div class="panel-heading"><h2>Phim</h2><button class="refresh-button" data-refresh="movies" type="button">Làm mới</button></div>
+        <p id="movies-error" class="error-message"></p>
+        <ul id="movies-list" class="data-list"><li>Đang tải...</li></ul>
+      </article>
+      <article class="panel">
+        <div class="panel-heading"><h2>Âm nhạc</h2><button class="refresh-button" data-refresh="music" type="button">Làm mới</button></div>
+        <p id="music-error" class="error-message"></p>
+        <ul id="music-list" class="data-list"><li>Đang tải...</li></ul>
+      </article>
+    </section>
+  </main>
+  <script src="admin.js"></script>
+</body>
+</html>
