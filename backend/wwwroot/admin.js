@@ -23,7 +23,7 @@ if (!currentUser || String(currentUser.vaiTro).toLowerCase() !== "admin") {
     const list = document.getElementById(config.list);
 
     if (!items.length) {
-      list.innerHTML = "<li>Chưa có dữ liệu.</li>";
+      list.innerHTML = "<li>No data yet.</li>";
       return;
     }
 
@@ -32,7 +32,7 @@ if (!currentUser || String(currentUser.vaiTro).toLowerCase() !== "admin") {
         return `<li>${getValue(item, "tenTheLoai", "TenTheLoai")}</li>`;
       }
 
-      const title = getValue(item, "tieuDe", "TieuDe") || "Không có tiêu đề";
+      const title = getValue(item, "tieuDe", "TieuDe") || "Untitled";
       const id = getValue(item, "noiDungID", "NoiDungID");
       return `<li>${title}<span class="item-meta">${id}</span></li>`;
     }).join("");
@@ -46,11 +46,11 @@ if (!currentUser || String(currentUser.vaiTro).toLowerCase() !== "admin") {
     try {
       const response = await fetch(config.url);
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Không thể tải dữ liệu.");
+      if (!response.ok) throw new Error(data.message || "Unable to load data.");
       renderItems(type, data);
     } catch (loadError) {
       document.getElementById(config.count).textContent = "!";
-      document.getElementById(config.list).innerHTML = "<li>Không tải được dữ liệu.</li>";
+      document.getElementById(config.list).innerHTML = "<li>Unable to load data.</li>";
       error.textContent = loadError.message;
     }
   }

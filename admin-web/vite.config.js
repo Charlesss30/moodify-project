@@ -7,7 +7,7 @@ export default defineConfig({
 		strictPort: true,
 		proxy: {
 			'/api': {
-				target: 'http://localhost:5170',
+				target: process.env.MOODIFY_API_TARGET || 'http://localhost:5170',
 				changeOrigin: true,
 			},
 		},

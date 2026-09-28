@@ -1,3 +1,5 @@
+> Cập nhật 25/09/2026: backend/admin đã chuyển sang MongoDB. Xem [hướng dẫn hiện tại](docs/MONGODB.md). Các mô tả PostgreSQL/SQL phía dưới là lịch sử trước khi chuyển.
+
 # Moodify
 
 Moodify là hệ thống đề xuất nội dung theo tâm trạng, gồm ba thành phần:
@@ -5,6 +7,10 @@ Moodify là hệ thống đề xuất nội dung theo tâm trạng, gồm ba th�
 - `backend/`: ASP.NET Core Web API + PostgreSQL.
 - `admin-web/`: website quản trị HTML5/CSS3/JavaScript, chạy bằng Vite.
 - `mobile-app/`: ứng dụng Flutter cho Android/Web/Windows.
+
+## Cập nhật admin và gợi ý
+
+Đã thêm JWT, phân quyền server, quản lý người dùng/tâm trạng, thống kê, lịch sử/đánh giá và gợi ý theo Valence/Arousal. Xem [phạm vi, cấu hình, kiểm thử và phần còn thiếu](docs/IMPLEMENTATION.md).
 
 ## Sơ đồ hoạt động
 
@@ -124,7 +130,7 @@ Có thể đăng nhập theo một trong hai cách:
    - Email: `admin@gmail.com`
    - Mật khẩu: `123`
 3. Nếu tài khoản có role `QuanTriVien`, hệ thống tự chuyển sang `http://localhost:5174`.
-4. Admin Web nhận session và mở Dashboard, không cần đăng nhập lại.
+4. Backend cấp phiên chuyển trang qua cookie HttpOnly dùng một lần; Dashboard tự tiếp nhận phiên, không cần đăng nhập lại.
 
 Hoặc mở trực tiếp `http://localhost:5174` và đăng nhập bằng cùng tài khoản.
 
@@ -161,7 +167,7 @@ flutter run -d android
 Chạy Flutter Web:
 
 ```powershell
-flutter run -d chrome
+flutter run -d chrome --web-port 8080
 ```
 
 ### Địa chỉ API theo nền tảng
@@ -303,3 +309,7 @@ moodify-project/
 │   └── test/
 └── README.md
 ```
+
+## Spotify (backend + admin)
+
+Xem [hướng dẫn Spotify](docs/SPOTIFY.md) cho cấu hình, luồng nhập nhạc → kiểm duyệt tâm trạng → database → quản lý/gợi ý và các kiểm thử. Spotify là nguồn tích hợp nhạc hiện tại; dữ liệu và mã tích hợp Zing cũ đã được xóa. Kết nối hiện lấy token thành công nhưng Spotify yêu cầu tài khoản chủ app có Premium để truy cập danh mục. Không triển khai Spotify trên mobile trong đợt này.

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -32,7 +32,7 @@
         <div id="login-success" class="alert alert-success hidden"></div>
 
         <form id="login-form" novalidate>
-          <label for="login-identifier">Email / Tên đăng nhập</label>
+          <label for="login-identifier">Email / Username</label>
           <div class="input-wrap" id="login-identifier-wrap">
             <i data-lucide="mail"></i>
             <input
@@ -44,7 +44,7 @@
           </div>
           <div id="login-identifier-error" class="field-error"></div>
 
-          <label for="login-password">Mật khẩu</label>
+          <label for="login-password">Password</label>
           <div class="input-wrap" id="login-password-wrap">
             <i data-lucide="lock"></i>
             <input
@@ -53,7 +53,7 @@
               placeholder="••••••••••••"
               autocomplete="current-password"
             >
-            <button type="button" class="icon-btn input-action" id="login-toggle-password" aria-label="Hiện mật khẩu">
+            <button type="button" class="icon-btn input-action" id="login-toggle-password" aria-label="Show password">
               <i data-lucide="eye"></i>
             </button>
           </div>
@@ -80,7 +80,7 @@
     <!-- REGISTER -->
     <section id="register-view" class="view auth-view hidden">
       <div class="auth-card register-card">
-        <button type="button" class="back-btn" data-nav="login" aria-label="Quay lại">
+        <button type="button" class="back-btn" data-nav="login" aria-label="Back">
           <i data-lucide="arrow-left"></i>
         </button>
 
@@ -112,8 +112,8 @@
           <label for="register-password">Password</label>
           <div class="input-wrap" id="register-password-wrap">
             <i data-lucide="lock"></i>
-            <input id="register-password" type="password" placeholder="Tối thiểu 6 ký tự" autocomplete="new-password">
-            <button type="button" class="icon-btn input-action" id="register-toggle-password" aria-label="Hiện mật khẩu">
+            <input id="register-password" type="password" placeholder="At least 6 characters" autocomplete="new-password">
+            <button type="button" class="icon-btn input-action" id="register-toggle-password" aria-label="Show password">
               <i data-lucide="eye"></i>
             </button>
           </div>
@@ -122,8 +122,8 @@
           <label for="register-confirm">Confirm Password</label>
           <div class="input-wrap" id="register-confirm-wrap">
             <i data-lucide="lock"></i>
-            <input id="register-confirm" type="password" placeholder="Nhập lại mật khẩu" autocomplete="new-password">
-            <button type="button" class="icon-btn input-action" id="register-toggle-confirm" aria-label="Hiện mật khẩu">
+            <input id="register-confirm" type="password" placeholder="Confirm password" autocomplete="new-password">
+            <button type="button" class="icon-btn input-action" id="register-toggle-confirm" aria-label="Show password">
               <i data-lucide="eye"></i>
             </button>
           </div>
@@ -131,7 +131,7 @@
 
           <label class="check-label terms-row">
             <input id="agree-terms" type="checkbox">
-            <span>Tôi đồng ý với Điều khoản Dịch vụ &amp; Chính sách Bảo mật</span>
+            <span>I agree to the Terms of Service &amp; Privacy Policy</span>
           </label>
 
           <button class="primary-btn" id="register-submit" type="submit" data-nav="login" disabled>
@@ -158,12 +158,12 @@
               alt="Avatar"
             >
             <div>
-              <div class="greeting">Xin chào <span id="home-role">[NguoiDung]</span>,</div>
+              <div class="greeting">Hello <span id="home-role">[User]</span>,</div>
               <div class="username" id="home-name">Alex Morgan</div>
             </div>
           </div>
 
-          <button id="logout-btn" class="icon-btn header-logout" aria-label="Đăng xuất">
+          <button id="logout-btn" class="icon-btn header-logout" aria-label="Log out">
             <i data-lucide="log-out"></i>
           </button>
         </header>
@@ -217,12 +217,12 @@
         <div class="danger-icon">
           <i data-lucide="log-out"></i>
         </div>
-        <h3>Xác nhận đăng xuất</h3>
-        <p>Bạn có chắc chắn muốn kết thúc phiên làm việc để bảo mật tài khoản cá nhân?</p>
+        <h3>Confirm logout</h3>
+        <p>Are you sure you want to log out?</p>
 
         <div class="modal-actions">
-          <button id="cancel-logout" class="secondary-btn">Hủy</button>
-          <button id="confirm-logout" class="danger-btn">Đăng xuất</button>
+          <button id="cancel-logout" class="secondary-btn">Cancel</button>
+          <button id="confirm-logout" class="danger-btn">Log out</button>
         </div>
       </div>
     </div>
@@ -230,5 +230,6 @@
   </div>
 
   <script src="app.js"></script>
+  <script type="module" src="discover.js"></script>
 </body>
 </html>

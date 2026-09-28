@@ -79,14 +79,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
       Future.delayed(const Duration(milliseconds: 600), () {
         if (mounted) {
-          final fullName = identifier.contains('@') 
-              ? identifier.split('@').first 
-              : identifier;
+          final user = result['data']['user'];
           widget.onLoginSuccess(UserAccount(
-            fullName: fullName,
-            email: identifier,
+            fullName: user['tenDangNhap'] ?? identifier,
+            email: user['email'] ?? identifier,
             password: '',
-            role: 'NguoiDung',
+            role: user['vaiTro'] ?? 'NguoiDung',
           ));
         }
       });

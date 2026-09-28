@@ -139,7 +139,7 @@ if (registerForm) {
 
         e.preventDefault();
 
-        console.log("Đang đăng ký...");
+        console.log("Registering...");
 
 
         const name =
@@ -160,32 +160,32 @@ if (registerForm) {
         // ==============================
 
         if (!name) {
-            alert("Vui lòng nhập họ tên.");
+            alert("Please enter your name.");
             return;
         }
 
         if (!email) {
-            alert("Vui lòng nhập email.");
+            alert("Please enter your email.");
             return;
         }
 
         if (!emailValid(email)) {
-            alert("Email không hợp lệ.");
+            alert("Invalid email address.");
             return;
         }
 
         if (!password || password.length < 6) {
-            alert("Mật khẩu phải có ít nhất 6 ký tự.");
+            alert("Password must have at least 6 characters.");
             return;
         }
 
         if (password !== confirmPassword) {
-            alert("Mật khẩu xác nhận không khớp.");
+            alert("Passwords do not match.");
             return;
         }
 
         if (!agreeTerms.checked) {
-            alert("Vui lòng đồng ý với điều khoản.");
+            alert("Please accept the terms.");
             return;
         }
 
@@ -197,7 +197,7 @@ if (registerForm) {
         try {
 
             registerSubmit.disabled = true;
-            registerSubmit.textContent = "Đang tạo tài khoản...";
+            registerSubmit.textContent = "Creating your account...";
 
 
             const response = await fetch(
@@ -231,7 +231,7 @@ if (registerForm) {
 
                 alert(
                     data.message ||
-                    "Đăng ký thất bại."
+                    "Registration failed."
                 );
 
                 return;
@@ -252,7 +252,7 @@ if (registerForm) {
             if (successText) {
 
                 successText.textContent =
-                    "Đăng ký thành công! Đang chuyển đến trang đăng nhập...";
+                    "Registration successful! Redirecting to login...";
             }
 
 
@@ -269,7 +269,7 @@ if (registerForm) {
             registerSubmit.disabled = true;
 
 
-            // Chuyển về Login sau 1.5 giây
+            // Chuyển về Login sau 1.5 seconds
 
             setTimeout(() => {
 
@@ -299,7 +299,7 @@ if (registerForm) {
             );
 
             alert(
-                "Không thể kết nối đến ASP.NET Core API."
+                "Unable to connect to the API."
             );
 
         } finally {
@@ -354,7 +354,7 @@ if (loginForm) {
             );
 
 
-        // Xóa thông báo cũ
+        // Delete thông báo cũ
 
         if (errorElement) {
 
@@ -380,7 +380,7 @@ if (loginForm) {
             if (errorElement) {
 
                 errorElement.textContent =
-                    "Vui lòng nhập email hoặc tên đăng nhập.";
+                    "Please enter your email or username.";
 
                 errorElement.classList.remove("hidden");
             }
@@ -394,7 +394,7 @@ if (loginForm) {
             if (errorElement) {
 
                 errorElement.textContent =
-                    "Vui lòng nhập mật khẩu.";
+                    "Please enter your password.";
 
                 errorElement.classList.remove("hidden");
             }
@@ -409,7 +409,7 @@ if (loginForm) {
 
         try {
 
-            console.log("Đang gọi API Login...");
+            console.log("Signing in...");
 
 
             const response = await fetch(
@@ -444,7 +444,7 @@ if (loginForm) {
 
                     errorElement.textContent =
                         data.message ||
-                        "Email hoặc mật khẩu không chính xác.";
+                        "Incorrect email or password.";
 
                     errorElement.classList.remove("hidden");
                 }
@@ -458,17 +458,18 @@ if (loginForm) {
             // ==============================
 
             console.log(
-                "Đăng nhập thành công:",
+                "Login successful:",
                 data.user
             );
 
 
-            // Lưu user vào biến hiện tại
+            // Save user vào biến hiện tại
 
             currentUser = data.user;
+            sessionStorage.setItem("moodify_user_token", data.token);
 
 
-            // Lưu phiên đăng nhập
+            // Save phiên đăng nhập
 
             localStorage.setItem(
                 "moodify_user",
@@ -476,8 +477,9 @@ if (loginForm) {
             );
 
             if (["admin", "quantrivien"].includes(String(currentUser.vaiTro).toLowerCase())) {
-                const adminUser = encodeURIComponent(JSON.stringify(currentUser));
-                window.location.href = `http://localhost:5174/?adminUser=${adminUser}`;
+                const adminUrl = new URL(window.location.origin);
+                adminUrl.port = '5174';
+                window.location.replace(adminUrl.href);
                 return;
             }
 
@@ -491,7 +493,7 @@ if (loginForm) {
             if (successElement) {
 
                 successElement.textContent =
-                    `Đăng nhập thành công! Xin chào ${currentUser.tenDangNhap}.`;
+                    `Login successful! Hello ${currentUser.tenDangNhap}.`;
 
                 successElement.classList.remove("hidden");
             }
@@ -509,6 +511,7 @@ if (loginForm) {
             setTimeout(() => {
 
                 showView("home");
+                window.dispatchEvent(new Event("moodify-user-login"));
 
             }, 700);
 
@@ -524,7 +527,7 @@ if (loginForm) {
             if (errorElement) {
 
                 errorElement.textContent =
-                    "Không thể kết nối đến máy chủ.";
+                    "Unable to connect to the server.";
 
                 errorElement.classList.remove("hidden");
             }
@@ -694,7 +697,7 @@ document
                 }
 
                 result.textContent =
-                    `${tab} đang chờ kết nối Backend/API.`;
+                    `${tab} is awaiting the backend connection.`;
 
                 result.classList.remove(
                     "hidden"
@@ -736,7 +739,7 @@ if (analyzeButton) {
             if (!text) {
 
                 result.textContent =
-                    "Vui lòng nhập mô tả tâm trạng.";
+                    "Please describe your mood.";
 
                 result.classList.remove(
                     "hidden"
@@ -760,7 +763,7 @@ if (analyzeButton) {
             // ==========================================
 
             result.textContent =
-                "Đã nhận nội dung tâm trạng. Phần phân tích AI sẽ được kết nối với ASP.NET Core API.";
+                "Your mood description has been received. AI analysis is not connected yet.";
 
             result.classList.remove(
                 "hidden"
@@ -837,8 +840,10 @@ if (confirmLogout) {
         function () {
 
             currentUser = null;
+            sessionStorage.removeItem("moodify_user_token");
+            window.dispatchEvent(new Event("moodify-user-logout"));
 
-            // Xóa phiên đăng nhập
+            // Delete phiên đăng nhập
             localStorage.removeItem("moodify_user");
 
             // Sau này khi có JWT

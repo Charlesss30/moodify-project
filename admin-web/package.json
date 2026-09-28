@@ -9,10 +9,10 @@
     "lint": "oxlint",
     "preview": "vite preview"
   },
-  "dependencies": {},
   "devDependencies": {
     "@types/node": "^24.13.3",
     "oxlint": "^1.81.0",
+    "playwright-core": "^1.63.0",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
   }

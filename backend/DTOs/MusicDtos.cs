@@ -4,6 +4,9 @@ namespace mood_recommendation.DTOs
 {
     public class MusicRequestDto
     {
+        [Range(-1,1)] public decimal? Valence { get; set; }
+        [Range(-1,1)] public decimal? Arousal { get; set; }
+        [RegularExpression("^(manual|genre-default|legacy-unverified|admin-selected|admin-adjusted)$")] public string? MoodSource { get; set; }
         [Required]
         [StringLength(100)]
         public string NoiDungID { get; set; } = string.Empty;
@@ -15,6 +18,7 @@ namespace mood_recommendation.DTOs
         [StringLength(255)]
         public string? TenNgheSi { get; set; }
 
+        [Url]
         public string? HinhAnh { get; set; }
 
         [StringLength(100)]

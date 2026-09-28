@@ -23,3 +23,10 @@ mobile-app/*.iml
 # Hệ điều hành
 .DS_Store
 Thumbs.db
+
+# Integration test build output
+tests/bin/
+tests/obj/
+
+.local-backups/
+**/node_modules/

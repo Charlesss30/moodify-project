@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'core/colors.dart';
+import 'core/api_service.dart';
 import 'core/mock_database.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
@@ -63,6 +63,7 @@ class _AppFlowCoordinatorState extends State<AppFlowCoordinator> {
           currentUser: _currentUserSession!,
           // UC03 - Dòng 4 & 5: Kết thúc phiên làm việc, quay về trạng thái vãng lai (login)
           onLogoutConfirmed: () {
+            ApiService.logout();
             setState(() {
               _currentUserSession = null;
               _currentView = 'login';

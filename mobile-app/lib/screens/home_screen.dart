@@ -1,3 +1,4 @@
+import 'mood_discovery_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../core/colors.dart';
@@ -19,7 +20,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _activeTab = 0;
-  final _moodController = TextEditingController();
+
 
   // UC03 - Dòng 1 & 2: Nhấp chọn đăng xuất -> Hiển thị hộp thoại xác nhận
   void _showLogoutConfirmationDialog() {
@@ -160,30 +161,21 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: const [
                               Icon(LucideIcons.sparkles, color: AppColors.accentPrimary, size: 18),
                               SizedBox(width: 8),
-                              Text('AI Mood Analysis', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                              Text('Khám phá theo tâm trạng', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                             ],
                           ),
                           const SizedBox(height: 10),
-                          TextField(
-                            controller: _moodController,
-                            maxLines: 2,
-                            style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
-                            decoration: InputDecoration(
-                              hintText: "Tell me how you're feeling...",
-                              hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.5)),
-                              border: InputBorder.none,
-                            ),
-                          ),
+                          const Text('Chọn tâm trạng để nhận gợi ý phim và nhạc phù hợp.'),
                           Align(
                             alignment: Alignment.centerRight,
                             child: ElevatedButton(
-                              onPressed: () {},
+                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MoodDiscoveryScreen())),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.accentPrimary,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                               ),
-                              child: const Text('Analyze Mood', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                              child: const Text('Chọn tâm trạng', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                             ),
                           )
                         ],
@@ -225,7 +217,17 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _navItem(IconData icon, String label, int index) {
     final active = _activeTab == index;
     return GestureDetector(
-      onTap: () => setState(() => _activeTab = index),
+      onTap: () {
+        if (index == 1 || index == 2) {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => MoodDiscoveryScreen(showHistory: index == 2)));
+        } else if (index == 3) {
+          showDialog<void>(context: context, builder: (context) => AlertDialog(
+            title: Text(widget.currentUser.fullName),
+            content: Text(widget.currentUser.email),
+            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Đóng'))],
+          ));
+        } else { setState(() => _activeTab = index); }
+      },
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

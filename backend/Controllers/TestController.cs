@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using MongoDB.Driver.Linq;
+using MongoDB.Driver;
 using mood_recommendation.Data;
 
 namespace mood_recommendation.Controllers
@@ -8,13 +9,14 @@ namespace mood_recommendation.Controllers
     [Route("api/[controller]")]
     public class TestController : ControllerBase
     {
-        private readonly AppDbContext _context;
+        private readonly MongoStore _context;
 
-        public TestController(AppDbContext context)
+        public TestController(MongoStore context)
         {
             _context = context;
         }
 
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
         [HttpGet("accounts")]
         public async Task<IActionResult> GetAccounts()
         {

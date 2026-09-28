@@ -1,0 +1,649 @@
+{
+  "contents": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "title",
+        "contentType",
+        "valence",
+        "arousal"
+      ],
+      "properties": {
+        "_id": {
+          "bsonType": "string"
+        },
+        "title": {
+          "bsonType": "string",
+          "minLength": 1
+        },
+        "contentType": {
+          "enum": [
+            "Movie",
+            "Song"
+          ]
+        },
+        "valence": {
+          "bsonType": [
+            "int",
+            "long",
+            "double",
+            "decimal"
+          ],
+          "minimum": -1,
+          "maximum": 1
+        },
+        "arousal": {
+          "bsonType": [
+            "int",
+            "long",
+            "double",
+            "decimal"
+          ],
+          "minimum": -1,
+          "maximum": 1
+        },
+        "imageUrl": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "deleted": {
+          "bsonType": "bool"
+        },
+        "reviewStatus": {
+          "enum": [
+            "pending",
+            "reviewed"
+          ]
+        },
+        "moodRuleVersion": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "modelVersion": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  },
+  "ratings": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "accountId",
+        "contentId",
+        "stars",
+        "createdAt"
+      ],
+      "properties": {
+        "_id": {
+          "bsonType": [
+            "int",
+            "long"
+          ],
+          "minimum": 1
+        },
+        "accountId": {
+          "bsonType": [
+            "int",
+            "long"
+          ],
+          "minimum": 1
+        },
+        "contentId": {
+          "bsonType": "string"
+        },
+        "stars": {
+          "bsonType": [
+            "int",
+            "long"
+          ],
+          "minimum": 1,
+          "maximum": 5
+        },
+        "comment": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "createdAt": {
+          "bsonType": "date"
+        }
+      }
+    }
+  },
+  "moodHistory": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "accountId",
+        "moodId",
+        "createdAt",
+        "valence",
+        "arousal"
+      ],
+      "properties": {
+        "_id": {
+          "bsonType": [
+            "int",
+            "long"
+          ],
+          "minimum": 1
+        },
+        "accountId": {
+          "bsonType": [
+            "int",
+            "long"
+          ],
+          "minimum": 1
+        },
+        "moodId": {
+          "bsonType": [
+            "int",
+            "long"
+          ],
+          "minimum": 1
+        },
+        "createdAt": {
+          "bsonType": "date"
+        },
+        "inputText": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "valence": {
+          "bsonType": [
+            "int",
+            "long",
+            "double",
+            "decimal"
+          ],
+          "minimum": -1,
+          "maximum": 1
+        },
+        "arousal": {
+          "bsonType": [
+            "int",
+            "long",
+            "double",
+            "decimal"
+          ],
+          "minimum": -1,
+          "maximum": 1
+        }
+      }
+    }
+  },
+  "movies": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "genreIds",
+        "moodSource"
+      ],
+      "properties": {
+        "_id": {
+          "bsonType": "string"
+        },
+        "genreIds": {
+          "bsonType": "array",
+          "items": {
+            "bsonType": "string"
+          },
+          "uniqueItems": true
+        },
+        "averageRating": {
+          "bsonType": [
+            "int",
+            "long",
+            "double",
+            "decimal",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 10
+        },
+        "imdbId": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "tmdbId": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "moodSource": {
+          "bsonType": "string"
+        }
+      }
+    }
+  },
+  "moods": {
+    "$and": [
+      {
+        "$jsonSchema": {
+          "bsonType": "object",
+          "required": [
+            "_id",
+            "name",
+            "nameNormalized",
+            "minValence",
+            "maxValence",
+            "minArousal",
+            "maxArousal"
+          ],
+          "properties": {
+            "_id": {
+              "bsonType": [
+                "int",
+                "long"
+              ],
+              "minimum": 1
+            },
+            "name": {
+              "bsonType": "string"
+            },
+            "nameNormalized": {
+              "bsonType": "string"
+            },
+            "minValence": {
+              "bsonType": [
+                "int",
+                "long",
+                "double",
+                "decimal"
+              ],
+              "minimum": -1,
+              "maximum": 1
+            },
+            "maxValence": {
+              "bsonType": [
+                "int",
+                "long",
+                "double",
+                "decimal"
+              ],
+              "minimum": -1,
+              "maximum": 1
+            },
+            "minArousal": {
+              "bsonType": [
+                "int",
+                "long",
+                "double",
+                "decimal"
+              ],
+              "minimum": -1,
+              "maximum": 1
+            },
+            "maxArousal": {
+              "bsonType": [
+                "int",
+                "long",
+                "double",
+                "decimal"
+              ],
+              "minimum": -1,
+              "maximum": 1
+            }
+          }
+        }
+      },
+      {
+        "$expr": {
+          "$and": [
+            {
+              "$lte": [
+                "$minValence",
+                "$maxValence"
+              ]
+            },
+            {
+              "$lte": [
+                "$minArousal",
+                "$maxArousal"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "music": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "source",
+        "moodSource"
+      ],
+      "properties": {
+        "_id": {
+          "bsonType": "string"
+        },
+        "artist": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "album": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "genreId": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "duration": {
+          "bsonType": [
+            "int",
+            "long",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "source": {
+          "bsonType": "string"
+        },
+        "externalId": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "sourceUrl": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "releaseDate": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "lastSyncedAt": {
+          "bsonType": [
+            "date",
+            "null"
+          ]
+        },
+        "moodSource": {
+          "bsonType": "string"
+        },
+        "valence": {
+          "bsonType": [
+            "int",
+            "long",
+            "double",
+            "decimal",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "energy": {
+          "bsonType": [
+            "int",
+            "long",
+            "double",
+            "decimal",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "danceability": {
+          "bsonType": [
+            "int",
+            "long",
+            "double",
+            "decimal",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "acousticness": {
+          "bsonType": [
+            "int",
+            "long",
+            "double",
+            "decimal",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "instrumentalness": {
+          "bsonType": [
+            "int",
+            "long",
+            "double",
+            "decimal",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "speechiness": {
+          "bsonType": [
+            "int",
+            "long",
+            "double",
+            "decimal",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "popularity": {
+          "bsonType": [
+            "int",
+            "long",
+            "double",
+            "decimal",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "tempo": {
+          "bsonType": [
+            "int",
+            "long",
+            "double",
+            "decimal",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "genres": {
+    "$and": [
+      {
+        "$jsonSchema": {
+          "bsonType": "object",
+          "required": [
+            "_id",
+            "name",
+            "nameNormalized"
+          ],
+          "properties": {
+            "_id": {
+              "bsonType": "string"
+            },
+            "name": {
+              "bsonType": "string",
+              "minLength": 1
+            },
+            "nameNormalized": {
+              "bsonType": "string"
+            },
+            "contentType": {
+              "enum": [
+                "Movie",
+                "Song",
+                "Both"
+              ]
+            },
+            "defaultValence": {
+              "bsonType": [
+                "int",
+                "long",
+                "double",
+                "decimal",
+                "null"
+              ],
+              "minimum": -1,
+              "maximum": 1
+            },
+            "defaultArousal": {
+              "bsonType": [
+                "int",
+                "long",
+                "double",
+                "decimal",
+                "null"
+              ],
+              "minimum": -1,
+              "maximum": 1
+            },
+            "moodVersion": {
+              "bsonType": [
+                "int",
+                "long"
+              ],
+              "minimum": 1
+            }
+          }
+        }
+      },
+      {
+        "$expr": {
+          "$eq": [
+            {
+              "$eq": [
+                {
+                  "$ifNull": [
+                    "$defaultValence",
+                    null
+                  ]
+                },
+                null
+              ]
+            },
+            {
+              "$eq": [
+                {
+                  "$ifNull": [
+                    "$defaultArousal",
+                    null
+                  ]
+                },
+                null
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "accounts": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "username",
+        "email",
+        "passwordHash",
+        "role",
+        "isActive",
+        "emailNormalized",
+        "usernameNormalized"
+      ],
+      "properties": {
+        "_id": {
+          "bsonType": [
+            "int",
+            "long"
+          ],
+          "minimum": 1
+        },
+        "username": {
+          "bsonType": "string",
+          "minLength": 1
+        },
+        "email": {
+          "bsonType": "string",
+          "minLength": 1
+        },
+        "passwordHash": {
+          "bsonType": "string",
+          "minLength": 1
+        },
+        "role": {
+          "enum": [
+            "Admin",
+            "User",
+            "AIEngineer"
+          ]
+        },
+        "isActive": {
+          "bsonType": "bool"
+        },
+        "emailNormalized": {
+          "bsonType": "string"
+        },
+        "usernameNormalized": {
+          "bsonType": "string"
+        }
+      }
+    }
+  },
+  "externalReferences": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "_id": {
+          "bsonType": "string",
+          "pattern": "^(OMDB_tt[0-9]{7,10}|SPOTIFY_[a-zA-Z0-9]{22})$"
+        }
+      }
+    }
+  }
+}

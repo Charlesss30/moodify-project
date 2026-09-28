@@ -1,74 +1,33 @@
 export const API_BASE_URL = '/api'
 export const API_SERVER_URL = 'http://localhost:5170/api'
-
-const storageKeys = { genres: 'moodify_genres', movies: 'moodify_movies', music: 'moodify_music' }
-
+export const tokenKey = 'moodify_admin_token'
 export class ApiError extends Error {
-  constructor(message, status) {
-    super(message)
-    this.name = 'ApiError'
-    this.status = status
-  }
+  constructor(message, status) { super(message); this.name = 'ApiError'; this.status = status }
 }
-
-async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+export async function request(path, options = {}) {
+  const token = sessionStorage.getItem(tokenKey)
+  const response = await fetch(API_BASE_URL + path, {
     ...options,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...options.headers },
   })
   if (!response.ok) {
-    let message = `Yêu cầu API thất bại (${response.status}).`
-    try {
-      const body = await response.json()
-      message = body.message || body.title || message
-    } catch {
-      // Keep the HTTP status message when the server has no JSON body.
+    let message = 'API request failed (' + response.status + ').'
+    try { const body = await response.json(); message = body.message || body.title || message } catch { /* no JSON */ }
+    if (response.status === 401) {
+      sessionStorage.removeItem(tokenKey)
+      window.dispatchEvent(new Event('moodify-session-expired'))
     }
     throw new ApiError(message, response.status)
   }
   return response.status === 204 ? undefined : response.json()
 }
-
-function readMock(resource, fallback) {
-  const stored = localStorage.getItem(storageKeys[resource])
-  return stored ? JSON.parse(stored) : fallback
+export async function getResource(_resource, endpoint) { return request(endpoint) }
+export async function getCollection(_resource, endpoints) { return request(endpoints[0]) }
+export async function saveResource(_resource, endpoint, item, editingId) {
+  return request(editingId != null ? endpoint + '/' + encodeURIComponent(editingId) : endpoint, {
+    method: editingId != null ? 'PUT' : 'POST', body: JSON.stringify(item),
+  })
 }
-
-function writeMock(resource, data) {
-  localStorage.setItem(storageKeys[resource], JSON.stringify(data))
-}
-
-export async function getResource(resource, endpoint, fallback) {
-  try { return await request(endpoint) } catch { return readMock(resource, fallback) }
-}
-
-export async function getCollection(resource, endpoints, fallback) {
-  let lastError
-  for (const endpoint of endpoints) {
-    try { return await request(endpoint) } catch (error) { lastError = error }
-  }
-  if (lastError?.name === 'ApiError') throw lastError
-  return readMock(resource, fallback)
-}
-
-export async function saveResource(resource, endpoint, item, editingId) {
-  try {
-    return editingId
-      ? await request(`${endpoint}/${editingId}`, { method: 'PUT', body: JSON.stringify(item) })
-      : await request(endpoint, { method: 'POST', body: JSON.stringify(item) })
-  } catch (error) {
-    if (error?.name === 'ApiError') throw error
-    const items = readMock(resource, [])
-    const next = editingId ? items.map((entry) => String(entry.id) === String(editingId) ? item : entry) : [...items, item]
-    writeMock(resource, next)
-    return item
-  }
-}
-
-export async function deleteResource(resource, endpoint, id) {
-  try { await request(`${endpoint}/${id}`, { method: 'DELETE' }) } catch (error) {
-    if (error?.name === 'ApiError') throw error
-    const items = readMock(resource, [])
-    writeMock(resource, items.filter((entry) => String(entry.id) !== String(id)))
-  }
+export async function deleteResource(_resource, endpoint, id) {
+  return request(endpoint + '/' + encodeURIComponent(id), { method: 'DELETE' })
 }

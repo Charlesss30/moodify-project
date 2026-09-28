@@ -1,8 +1,12 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using MongoDB.Driver.Linq;
+using MongoDB.Driver;
 using mood_recommendation.Data;
 using mood_recommendation.DTOs;
 using mood_recommendation.Models;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
+using mood_recommendation.Services;
 
 namespace MoodRecommendationAPI.Controllers
 {
@@ -10,11 +14,47 @@ namespace MoodRecommendationAPI.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
-        private readonly AppDbContext _context;
+        private readonly MongoStore _context;
+        private readonly TokenService _tokens;
+        private readonly AdminLoginHandoff _handoff;
 
-        public AuthController(AppDbContext context)
+        public AuthController(MongoStore context, TokenService tokens, AdminLoginHandoff handoff)
         {
             _context = context;
+            _tokens = tokens;
+            _handoff = handoff;
+        }
+
+        [Authorize]
+        [HttpGet("me")]
+        public async Task<IActionResult> Me()
+        {
+            var id = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            return Ok(await _context.TaiKhoans.Where(x => x.TaiKhoanID == id)
+                .Select(x => new { x.TaiKhoanID, x.TenDangNhap, x.Email, x.VaiTro }).SingleAsync());
+        }
+
+        private CookieOptions HandoffCookie(bool expire = false) => new()
+        {
+            HttpOnly = true, Secure = Request.IsHttps, SameSite = SameSiteMode.Strict,
+            Path = AdminLoginHandoff.CookiePath, MaxAge = expire ? TimeSpan.Zero : TimeSpan.FromMinutes(1),
+            IsEssential = true
+        };
+
+        [HttpPost("admin-session")]
+        public async Task<IActionResult> AdminSession()
+        {
+            Response.Headers.CacheControl = "no-store";
+            if (!Request.Cookies.TryGetValue(AdminLoginHandoff.CookieName, out var code))
+                return NoContent();
+            Response.Cookies.Delete(AdminLoginHandoff.CookieName, HandoffCookie(expire: true));
+            var id = _handoff.Consume(code);
+            if (id == null) return Unauthorized(new { message = "Your sign-in handoff has expired. Please sign in again." });
+            var user = await _context.TaiKhoans.FirstOrDefaultAsync(x => x.TaiKhoanID == id);
+            if (user == null || !user.TrangThai || !AdminRoles.IsAdmin(user.VaiTro))
+                return StatusCode(403, new { message = "This account no longer has administrator access." });
+            var expiresAt = DateTime.UtcNow.AddHours(1);
+            return Ok(new { token = _tokens.Create(user, expiresAt), expiresAt });
         }
 
         // POST: api/Auth/register
@@ -27,20 +67,20 @@ namespace MoodRecommendationAPI.Controllers
             {
                 return BadRequest(new
                 {
-                    message = "Vui lòng nhập đầy đủ thông tin."
+                    message = "Please complete all required fields."
                 });
             }
 
             var exists = await _context.TaiKhoans
                 .AnyAsync(x =>
-                    x.TenDangNhap == dto.TenDangNhap ||
-                    x.Email == dto.Email);
+                    x.TenDangNhapNormalized == MongoStore.Normalize(dto.TenDangNhap) ||
+                    x.EmailNormalized == MongoStore.Normalize(dto.Email));
 
             if (exists)
             {
                 return BadRequest(new
                 {
-                    message = "Tên đăng nhập hoặc email đã tồn tại."
+                    message = "Username or email already exists."
                 });
             }
 
@@ -49,16 +89,16 @@ namespace MoodRecommendationAPI.Controllers
                 TenDangNhap = dto.TenDangNhap,
                 Email = dto.Email,
                 MatKhau = BCrypt.Net.BCrypt.HashPassword(dto.MatKhau),
-                VaiTro = "NguoiDung",
+                VaiTro = "User",
                 TrangThai = true
             };
 
-            _context.TaiKhoans.Add(taiKhoan);
-            await _context.SaveChangesAsync();
+            await _context.Insert(taiKhoan);
+
 
             return Ok(new
             {
-                message = "Đăng ký thành công."
+                message = "Registration successful."
             });
         }
 
@@ -66,16 +106,23 @@ namespace MoodRecommendationAPI.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDto dto)
         {
+            Response.Headers.CacheControl = "no-store";
+            // A new login attempt replaces any pending browser handoff.
+            if (Request.Cookies.TryGetValue(AdminLoginHandoff.CookieName, out var oldCode))
+                _handoff.Consume(oldCode);
+            Response.Cookies.Delete(AdminLoginHandoff.CookieName, HandoffCookie(expire: true));
+            if (string.IsNullOrWhiteSpace(dto.Identifier) || string.IsNullOrEmpty(dto.MatKhau))
+                return BadRequest(new { message = "Please enter your username and password." });
             var user = await _context.TaiKhoans
                 .FirstOrDefaultAsync(x =>
-                    x.Email == dto.Identifier ||
-                    x.TenDangNhap == dto.Identifier);
+                    x.EmailNormalized == MongoStore.Normalize(dto.Identifier) ||
+                    x.TenDangNhapNormalized == MongoStore.Normalize(dto.Identifier));
 
             if (user == null)
             {
                 return Unauthorized(new
                 {
-                    message = "Email hoặc tên đăng nhập không tồn tại."
+                    message = "Email or username was not found."
                 });
             }
 
@@ -83,7 +130,7 @@ namespace MoodRecommendationAPI.Controllers
             {
                 return Unauthorized(new
                 {
-                    message = "Tài khoản đã bị khóa."
+                    message = "This account has been disabled."
                 });
             }
 
@@ -93,13 +140,18 @@ namespace MoodRecommendationAPI.Controllers
             {
                 return Unauthorized(new
                 {
-                    message = "Mật khẩu không chính xác."
+                    message = "Incorrect password."
                 });
             }
 
+            if (AdminRoles.IsAdmin(user.VaiTro))
+                Response.Cookies.Append(AdminLoginHandoff.CookieName, _handoff.Issue(user.TaiKhoanID), HandoffCookie());
+            var expiresAt = DateTime.UtcNow.AddHours(1);
             return Ok(new
             {
-                message = "Đăng nhập thành công.",
+                message = "Login successful.",
+                token = _tokens.Create(user, expiresAt),
+                expiresAt,
                 user = new
                 {
                     user.TaiKhoanID,

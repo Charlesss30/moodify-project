@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,33 +11,33 @@
     <header class="admin-header">
       <div>
         <p class="eyebrow">MOODIFY / ADMIN</p>
-        <h1>Trang quản trị</h1>
+        <h1>Admin dashboard</h1>
         <p id="admin-user" class="muted"></p>
       </div>
-      <button id="logout-button" class="outline-button" type="button">Đăng xuất</button>
+      <button id="logout-button" class="outline-button" type="button">Log out</button>
     </header>
 
-    <section class="stats-grid" aria-label="Thống kê">
-      <article class="stat-card"><span>Thể loại</span><strong id="genre-count">-</strong></article>
-      <article class="stat-card"><span>Phim</span><strong id="movie-count">-</strong></article>
-      <article class="stat-card"><span>Âm nhạc</span><strong id="music-count">-</strong></article>
+    <section class="stats-grid" aria-label="Statistics">
+      <article class="stat-card"><span>Genres</span><strong id="genre-count">-</strong></article>
+      <article class="stat-card"><span>Movies</span><strong id="movie-count">-</strong></article>
+      <article class="stat-card"><span>Music</span><strong id="music-count">-</strong></article>
     </section>
 
     <section class="content-grid">
       <article class="panel">
-        <div class="panel-heading"><h2>Thể loại</h2><button class="refresh-button" data-refresh="genres" type="button">Làm mới</button></div>
+        <div class="panel-heading"><h2>Genres</h2><button class="refresh-button" data-refresh="genres" type="button">Refresh</button></div>
         <p id="genres-error" class="error-message"></p>
-        <ul id="genres-list" class="data-list"><li>Đang tải...</li></ul>
+        <ul id="genres-list" class="data-list"><li>Loading...</li></ul>
       </article>
       <article class="panel">
-        <div class="panel-heading"><h2>Phim</h2><button class="refresh-button" data-refresh="movies" type="button">Làm mới</button></div>
+        <div class="panel-heading"><h2>Movies</h2><button class="refresh-button" data-refresh="movies" type="button">Refresh</button></div>
         <p id="movies-error" class="error-message"></p>
-        <ul id="movies-list" class="data-list"><li>Đang tải...</li></ul>
+        <ul id="movies-list" class="data-list"><li>Loading...</li></ul>
       </article>
       <article class="panel">
-        <div class="panel-heading"><h2>Âm nhạc</h2><button class="refresh-button" data-refresh="music" type="button">Làm mới</button></div>
+        <div class="panel-heading"><h2>Music</h2><button class="refresh-button" data-refresh="music" type="button">Refresh</button></div>
         <p id="music-error" class="error-message"></p>
-        <ul id="music-list" class="data-list"><li>Đang tải...</li></ul>
+        <ul id="music-list" class="data-list"><li>Loading...</li></ul>
       </article>
     </section>
   </main>

@@ -1,0 +1,218 @@
+[
+  {
+    "name": "Action",
+    "contentType": "Movie",
+    "defaultValence": 0.1,
+    "defaultArousal": 0.8
+  },
+  {
+    "name": "Adventure",
+    "contentType": "Movie",
+    "defaultValence": 0.4,
+    "defaultArousal": 0.6
+  },
+  {
+    "name": "Comedy",
+    "contentType": "Movie",
+    "defaultValence": 0.7,
+    "defaultArousal": 0.4
+  },
+  {
+    "name": "Drama",
+    "contentType": "Movie",
+    "defaultValence": -0.2,
+    "defaultArousal": 0.1
+  },
+  {
+    "name": "Horror",
+    "contentType": "Movie",
+    "defaultValence": -0.7,
+    "defaultArousal": 0.8
+  },
+  {
+    "name": "Thriller",
+    "contentType": "Movie",
+    "defaultValence": -0.4,
+    "defaultArousal": 0.7
+  },
+  {
+    "name": "Romance",
+    "contentType": "Movie",
+    "defaultValence": 0.6,
+    "defaultArousal": 0.1
+  },
+  {
+    "name": "Animation",
+    "contentType": "Movie",
+    "defaultValence": 0.6,
+    "defaultArousal": 0.4
+  },
+  {
+    "name": "Family",
+    "contentType": "Movie",
+    "defaultValence": 0.6,
+    "defaultArousal": 0.2
+  },
+  {
+    "name": "Fantasy",
+    "contentType": "Movie",
+    "defaultValence": 0.3,
+    "defaultArousal": 0.5
+  },
+  {
+    "name": "Sci-Fi",
+    "contentType": "Movie",
+    "defaultValence": 0.1,
+    "defaultArousal": 0.6
+  },
+  {
+    "name": "Crime",
+    "contentType": "Movie",
+    "defaultValence": -0.4,
+    "defaultArousal": 0.5
+  },
+  {
+    "name": "Mystery",
+    "contentType": "Movie",
+    "defaultValence": -0.1,
+    "defaultArousal": 0.4
+  },
+  {
+    "name": "War",
+    "contentType": "Movie",
+    "defaultValence": -0.6,
+    "defaultArousal": 0.7
+  },
+  {
+    "name": "Documentary",
+    "contentType": "Movie",
+    "defaultValence": 0,
+    "defaultArousal": -0.3
+  },
+  {
+    "name": "Biography",
+    "contentType": "Movie",
+    "defaultValence": 0.1,
+    "defaultArousal": 0
+  },
+  {
+    "name": "History",
+    "contentType": "Movie",
+    "defaultValence": -0.1,
+    "defaultArousal": 0.1
+  },
+  {
+    "name": "Music",
+    "contentType": "Movie",
+    "defaultValence": 0.5,
+    "defaultArousal": 0.4
+  },
+  {
+    "name": "Musical",
+    "contentType": "Movie",
+    "defaultValence": 0.6,
+    "defaultArousal": 0.5
+  },
+  {
+    "name": "Sport",
+    "contentType": "Movie",
+    "defaultValence": 0.5,
+    "defaultArousal": 0.6
+  },
+  {
+    "name": "Western",
+    "contentType": "Movie",
+    "defaultValence": 0,
+    "defaultArousal": 0.5
+  },
+  {
+    "name": "Pop",
+    "contentType": "Song",
+    "defaultValence": 0.5,
+    "defaultArousal": 0.5
+  },
+  {
+    "name": "Chill",
+    "contentType": "Song",
+    "defaultValence": 0.3,
+    "defaultArousal": -0.5
+  },
+  {
+    "name": "Ballad",
+    "contentType": "Song",
+    "defaultValence": -0.2,
+    "defaultArousal": -0.3
+  },
+  {
+    "name": "R&B",
+    "contentType": "Song",
+    "defaultValence": 0.2,
+    "defaultArousal": 0.2
+  },
+  {
+    "name": "Hip-Hop",
+    "contentType": "Song",
+    "defaultValence": 0.1,
+    "defaultArousal": 0.7
+  },
+  {
+    "name": "Rock",
+    "contentType": "Song",
+    "defaultValence": 0.1,
+    "defaultArousal": 0.8
+  },
+  {
+    "name": "Electronic",
+    "contentType": "Song",
+    "defaultValence": 0.5,
+    "defaultArousal": 0.9
+  },
+  {
+    "name": "Jazz",
+    "contentType": "Song",
+    "defaultValence": 0.3,
+    "defaultArousal": -0.2
+  },
+  {
+    "name": "Blues",
+    "contentType": "Song",
+    "defaultValence": -0.3,
+    "defaultArousal": -0.2
+  },
+  {
+    "name": "Classical",
+    "contentType": "Song",
+    "defaultValence": 0.1,
+    "defaultArousal": -0.3
+  },
+  {
+    "name": "Country",
+    "contentType": "Song",
+    "defaultValence": 0.3,
+    "defaultArousal": 0.1
+  },
+  {
+    "name": "Folk",
+    "contentType": "Song",
+    "defaultValence": 0.2,
+    "defaultArousal": -0.3
+  },
+  {
+    "name": "Acoustic",
+    "contentType": "Song",
+    "defaultValence": 0.2,
+    "defaultArousal": -0.4
+  },
+  {
+    "name": "Soul",
+    "contentType": "Song",
+    "defaultValence": 0.3,
+    "defaultArousal": 0.1
+  },
+  {
+    "name": "Latin",
+    "contentType": "Song",
+    "defaultValence": 0.6,
+    "defaultArousal": 0.7
+  }
+]
