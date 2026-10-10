@@ -169,6 +169,54 @@
             "null"
           ]
         },
+        "analysisId": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "analyzerVersion": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "mappingVersion": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "analysisSource": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "decisionSource": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "moodConfigHash": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "analysisExpiresAt": {
+          "bsonType": [
+            "date",
+            "null"
+          ]
+        },
+        "recommendationResponseJson": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
         "valence": {
           "bsonType": [
             "int",
@@ -188,6 +236,12 @@
           ],
           "minimum": -1,
           "maximum": 1
+        },
+        "recommendationRequestHash": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
         }
       }
     }
@@ -236,6 +290,31 @@
         },
         "moodSource": {
           "bsonType": "string"
+        },
+        "director": {
+          "bsonType": [
+            "string",
+            "null"
+          ],
+          "maxLength": 500
+        },
+        "trailerUrl": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "ratingSource": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "metadataSource": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
         }
       }
     }
@@ -642,6 +721,194 @@
         "_id": {
           "bsonType": "string",
           "pattern": "^(OMDB_tt[0-9]{7,10}|SPOTIFY_[a-zA-Z0-9]{22})$"
+        }
+      }
+    }
+  },
+  "aiModels": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "displayName",
+        "task",
+        "language",
+        "artifactHash",
+        "configHash",
+        "validationStatus"
+      ],
+      "properties": {
+        "_id": {
+          "bsonType": "string",
+          "minLength": 1
+        },
+        "displayName": {
+          "bsonType": "string"
+        },
+        "task": {
+          "bsonType": "string"
+        },
+        "language": {
+          "bsonType": "string"
+        },
+        "artifactHash": {
+          "bsonType": "string",
+          "pattern": "^[A-Fa-f0-9]{64}$"
+        },
+        "configHash": {
+          "bsonType": "string",
+          "pattern": "^[A-Fa-f0-9]{64}$"
+        },
+        "validationStatus": {
+          "enum": [
+            "validated",
+            "rejected"
+          ]
+        },
+        "validatedAt": {
+          "bsonType": "date"
+        },
+        "validatedBy": {
+          "bsonType": [
+            "int",
+            "long"
+          ]
+        }
+      }
+    }
+  },
+  "aiModelState": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "revision"
+      ],
+      "properties": {
+        "_id": {
+          "enum": [
+            "active"
+          ]
+        },
+        "activeVersion": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "previousVersion": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "bsonType": [
+            "int",
+            "long"
+          ],
+          "minimum": 0
+        },
+        "updatedAt": {
+          "bsonType": "date"
+        },
+        "updatedBy": {
+          "bsonType": [
+            "int",
+            "long"
+          ]
+        }
+      }
+    }
+  },
+  "aiAudit": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "actorId",
+        "actorRole",
+        "action",
+        "outcome",
+        "createdAt"
+      ],
+      "properties": {
+        "_id": {
+          "bsonType": "string"
+        },
+        "actorId": {
+          "bsonType": [
+            "int",
+            "long"
+          ]
+        },
+        "actorRole": {
+          "enum": [
+            "Admin",
+            "AIEngineer"
+          ]
+        },
+        "action": {
+          "bsonType": "string"
+        },
+        "modelVersion": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "succeeded",
+            "rejected",
+            "conflict"
+          ]
+        },
+        "detail": {
+          "bsonType": "string"
+        },
+        "createdAt": {
+          "bsonType": "date"
+        }
+      }
+    }
+  },
+  "interactions": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "accountId",
+        "contentId",
+        "action",
+        "createdAt"
+      ],
+      "properties": {
+        "_id": {
+          "bsonType": "string"
+        },
+        "accountId": {
+          "bsonType": "int"
+        },
+        "contentId": {
+          "bsonType": "string"
+        },
+        "action": {
+          "enum": [
+            "detail_open",
+            "player_loaded",
+            "external_open",
+            "trailer_open"
+          ]
+        },
+        "createdAt": {
+          "bsonType": "date"
+        },
+        "recommendationId": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
         }
       }
     }

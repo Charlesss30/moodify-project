@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../core/colors.dart';
 import '../core/api_service.dart';
 
@@ -24,7 +25,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
 
   bool _showPassword = false;
-  bool _agreedToTerms = false;
   bool _isLoading = false;
 
   String? _nameError;
@@ -76,10 +76,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       hasError = true;
     }
 
-    if (!_agreedToTerms) {
-      return;
-    }
-
     if (hasError) {
       setState(() {});
       return;
@@ -88,30 +84,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     // UC01 - Dòng 5 & 6: Gọi API lưu thông tin vào PostgreSQL
-    final result = await ApiService.register(
-      fullName: name,
-      email: email,
-      password: password,
-    );
-
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-
-    if (result['success'] == true) {
+    try {
+      await ApiService.register(
+        fullName: name,
+        email: email,
+        password: password,
+      );
+      if (!mounted) return;
       // UC01 - Dòng 7: Thông báo thành công và quay lại login
       setState(() {
-        _successMsg = 'Đăng ký thành công! Đang chuyển hướng về trang đăng nhập...';
+        _successMsg =
+            'Đăng ký thành công! Đang chuyển hướng về trang đăng nhập...';
       });
 
       Future.delayed(const Duration(milliseconds: 1200), () {
         if (mounted) widget.onRegisterSuccess();
       });
-    } else {
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
       // UC01 - Dòng 5 sự kiện phụ: Báo lỗi trùng email hoặc lỗi server
       setState(() {
-        _emailError = result['message'] ?? 'Tài khoản hoặc email này đã được đăng ký.';
+        _generalError = error.message;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -127,7 +132,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: IconButton(
-                  onPressed: widget.onNavigateToLogin,
+                  onPressed: _isLoading ? null : widget.onNavigateToLogin,
                   icon: const Icon(
                     LucideIcons.arrowLeft,
                     color: AppColors.textPrimary,
@@ -140,7 +145,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Create Account',
+                'Tạo tài khoản',
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
@@ -149,7 +154,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 4),
               const Text(
-                'Personalize your entertainment journey with AI',
+                'Tạo tài khoản để bắt đầu khám phá Moodify.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 18),
@@ -159,15 +164,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   padding: const EdgeInsets.all(12),
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
-                    color: AppColors.danger.withOpacity(0.1),
+                    color: AppColors.danger.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.danger.withOpacity(0.3)),
+                    border: Border.all(
+                      color: AppColors.danger.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(LucideIcons.alertCircle, color: AppColors.danger, size: 18),
+                      const Icon(
+                        LucideIcons.alertCircle,
+                        color: AppColors.danger,
+                        size: 18,
+                      ),
                       const SizedBox(width: 8),
-                      Expanded(child: Text(_generalError!, style: const TextStyle(color: Color(0xFFFDA4AF), fontSize: 12))),
+                      Expanded(
+                        child: Text(
+                          _generalError!,
+                          style: const TextStyle(
+                            color: Color(0xFFFDA4AF),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -177,10 +196,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   padding: const EdgeInsets.all(12),
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
-                    color: AppColors.positive.withOpacity(0.1),
+                    color: AppColors.positive.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: AppColors.positive.withOpacity(0.3),
+                      color: AppColors.positive.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
@@ -205,23 +224,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
 
               _buildField(
-                'Full Name',
-                'Alex Morgan',
+                'Tên đăng nhập',
+                'Tên bạn muốn sử dụng',
                 LucideIcons.user,
                 _nameController,
                 _nameError,
               ),
               const SizedBox(height: 12),
               _buildField(
-                'Email address',
-                'alex.designer@example.com',
+                'Email',
+                'name@example.com',
                 LucideIcons.mail,
                 _emailController,
                 _emailError,
               ),
               const SizedBox(height: 12),
               _buildField(
-                'Password',
+                'Mật khẩu',
                 'Tối thiểu 6 ký tự',
                 LucideIcons.lock,
                 _passwordController,
@@ -230,7 +249,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 12),
               _buildField(
-                'Confirm Password',
+                'Nhập lại mật khẩu',
                 'Nhập lại mật khẩu',
                 LucideIcons.lock,
                 _confirmPasswordController,
@@ -239,35 +258,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 12),
 
-              Row(
-                children: [
-                  SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: Checkbox(
-                      value: _agreedToTerms,
-                      activeColor: AppColors.accentPrimary,
-                      side: BorderSide(color: Colors.white.withOpacity(0.2)),
-                      onChanged: (v) =>
-                          setState(() => _agreedToTerms = v ?? false),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Tôi đồng ý với Điều khoản Dịch vụ & Chính sách Bảo mật',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
               const SizedBox(height: 20),
 
               ElevatedButton(
-                onPressed: (_agreedToTerms && !_isLoading) ? _handleRegister : null,
+                onPressed: _isLoading ? null : _handleRegister,
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.zero,
                   shape: RoundedRectangleBorder(
@@ -277,15 +271,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 child: Ink(
                   decoration: BoxDecoration(
-                    gradient: _agreedToTerms
-                        ? const LinearGradient(
-                            colors: [
-                              AppColors.accentPrimary,
-                              AppColors.accentSecondary,
-                            ],
-                          )
-                        : null,
-                    color: !_agreedToTerms ? AppColors.surfaceSecondary : null,
+                    gradient: const LinearGradient(
+                      colors: [
+                        AppColors.accentPrimary,
+                        AppColors.accentSecondary,
+                      ],
+                    ),
+                    color: null,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Container(
@@ -295,14 +287,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ? const SizedBox(
                             width: 22,
                             height: 22,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
                           )
-                        : Text(
-                            'Create Account',
+                        : const Text(
+                            'Đăng ký',
                             style: TextStyle(
-                              color: _agreedToTerms
-                                  ? Colors.white
-                                  : AppColors.textSecondary,
+                              color: Colors.white,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -322,9 +315,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                   GestureDetector(
-                    onTap: widget.onNavigateToLogin,
+                    onTap: _isLoading ? null : widget.onNavigateToLogin,
                     child: const Text(
-                      'Sign In',
+                      'Đăng nhập',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.accentPrimary,
@@ -359,6 +352,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
         const SizedBox(height: 6),
         TextField(
           controller: controller,
+          hintLocales: controller == _nameController
+              ? const [Locale('vi', 'VN'), Locale('en')]
+              : null,
+          keyboardType: controller == _emailController
+              ? TextInputType.emailAddress
+              : TextInputType.text,
+          autocorrect: controller == _nameController,
+          enableSuggestions: !isPassword,
           obscureText: isPassword && !_showPassword,
           style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
           decoration: InputDecoration(
@@ -376,7 +377,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 : null,
             hintText: hint,
             hintStyle: TextStyle(
-              color: AppColors.textSecondary.withOpacity(0.4),
+              color: AppColors.textSecondary.withValues(alpha: 0.4),
             ),
             filled: true,
             fillColor: AppColors.surface,
@@ -389,7 +390,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               borderSide: BorderSide(
                 color: error != null
                     ? AppColors.danger
-                    : Colors.white.withOpacity(0.05),
+                    : Colors.white.withValues(alpha: 0.05),
               ),
             ),
           ),

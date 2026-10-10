@@ -29,4 +29,41 @@ tests/bin/
 tests/obj/
 
 .local-backups/
+database_backup/
 **/node_modules/
+
+# AI inference local environment
+ai-service/.venv/
+ai-service/__pycache__/
+.local-build/
+
+# Local environments, credentials and generated files (keep source/lockfiles)
+**/.venv/
+**/__pycache__/
+*.py[cod]
+**/.env
+**/.env.*
+!**/.env.example
+**/appsettings.*.local.json
+docs/.mobile-report-word/
+docs/.progress-report-word/
+
+# Research data and model artifacts are distributed separately, not through Git
+code-train/train-KLCN/goemotions/
+code-train/train-KLCN/movielens/
+code-train/train-KLCN/spotify/
+code-train/train-KLCN/log/
+code-train/train-KLCN/output/
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.zip
+
+# Local audit snapshots (recreated by maintenance tools; not public fixtures)
+docs/AI_ARCHIVE_VERIFICATION.json
+docs/AI_ARTIFACT_MANIFEST.json
+docs/AI_AUDIT_REPRO_RESULTS.json
+docs/AI_DATABASE_ALIGNMENT_SNAPSHOT.json
+docs/TMDB_DATA_MIGRATION_RESULTS.json

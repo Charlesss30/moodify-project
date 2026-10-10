@@ -17,15 +17,15 @@ public static class ExternalCatalogTests
         using var memory=new MemoryCache(new MemoryCacheOptions());
         var transport=new MovieHandler();var music=new MusicClient();
         using var http=new HttpClient(transport);
-        var catalog=new ExternalCatalog(db,new Factory(http),new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"Omdb:ApiKey","fixture"}}).Build(),music,memory);
+        var catalog=new ExternalCatalog(db,new Factory(http),new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"Tmdb:AccessToken","fixture"}}).Build(),music,memory);
         var genre=new TheLoai{TenTheLoai="Reference test genre",ContentType="Movie",DefaultValence=.4m,DefaultArousal=.6m};await db.Insert(genre);
         const string movieId="OMDB_tt1234567",songId="SPOTIFY_11dFghVXANMlKmJXsNCbNl";
         await catalog.References.InsertManyAsync([new(){Id=movieId},new(){Id=songId}]);
         try {
             var concurrent=await Task.WhenAll(Enumerable.Range(0,5).Select(_=>catalog.Get(movieId)));
-            Check(transport.Calls==1,"Concurrent reference reads were not deduplicated.");
+            Check(transport.Calls==2,"Concurrent reference reads were not deduplicated.");
             var movie=concurrent[0]!;
-            Check(movie.IsExternalReference&&movie.TieuDe=="Reference movie"&&movie.HinhAnh=="https://example.org/poster.jpg","Movie reference did not hydrate metadata.");
+            Check(movie.IsExternalReference&&movie.TieuDe=="Reference movie"&&movie.HinhAnh=="https://image.tmdb.org/t/p/w500/poster.jpg","Movie reference did not hydrate metadata.");
             Check(movie.MoodAvailable&&movie.Valence==.4m&&movie.Arousal==.6m,"Reference movie did not use genre configuration.");
             var song=await catalog.Get(songId);
             Check(song!.Nhac!.Source=="Spotify"&&song.HinhAnh!=null&&!song.MoodAvailable,"Song metadata or unknown-mood handling incorrect.");
@@ -51,7 +51,8 @@ public static class ExternalCatalogTests
         {
             Calls++;await Task.Delay(20,ct);
             if(Fail)return new(HttpStatusCode.ServiceUnavailable);
-            return new(HttpStatusCode.OK){Content=new StringContent("""{"Response":"True","Type":"movie","imdbID":"tt1234567","Title":"Reference movie","Genre":"Reference test genre","Poster":"https://example.org/poster.jpg","Plot":"Short synopsis","imdbRating":"8.1"}""",Encoding.UTF8,"application/json")};
+            var body=request.RequestUri!.AbsolutePath.Contains("/find/")?"""{"movie_results":[{"id":42}]}""":"""{"id":42,"imdb_id":"tt1234567","title":"Reference movie","genres":[{"name":"Reference test genre"}],"poster_path":"/poster.jpg","overview":"Short synopsis","vote_average":8.1,"vote_count":100}""";
+            return new(HttpStatusCode.OK){Content=new StringContent(body,Encoding.UTF8,"application/json")};
         }
     }
     private sealed class MusicClient:ISpotifyClient

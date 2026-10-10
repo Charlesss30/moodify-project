@@ -2,7 +2,7 @@ class UserAccount {
   final String fullName;
   final String email;
   final String password; // Giả lập mật khẩu đã mã hóa
-  final String role;     // NguoiDung / QuanTriVien / KySuAI
+  final String role; // NguoiDung / QuanTriVien / KySuAI
   final bool isLocked;
 
   UserAccount({
@@ -35,7 +35,9 @@ class MockDatabase {
 
   // UC01 - Dòng 5: Kiểm tra tính duy nhất
   static bool isEmailExists(String email) {
-    return users.any((u) => u.email.toLowerCase() == email.toLowerCase().trim());
+    return users.any(
+      (u) => u.email.toLowerCase() == email.toLowerCase().trim(),
+    );
   }
 
   // UC01 - Dòng 6: Mã hoá và lưu người dùng mới
@@ -44,12 +46,14 @@ class MockDatabase {
     required String email,
     required String password,
   }) {
-    users.add(UserAccount(
-      fullName: fullName,
-      email: email.trim(),
-      password: password,
-      role: 'NguoiDung',
-    ));
+    users.add(
+      UserAccount(
+        fullName: fullName,
+        email: email.trim(),
+        password: password,
+        role: 'NguoiDung',
+      ),
+    );
   }
 
   // UC02 - Dòng 5 & 6: Truy vấn tài khoản và xác thực mật khẩu
@@ -57,7 +61,10 @@ class MockDatabase {
     final cleanId = identifier.trim().toLowerCase();
     try {
       return users.firstWhere(
-        (u) => (u.email.toLowerCase() == cleanId || u.fullName.toLowerCase() == cleanId) && u.password == password,
+        (u) =>
+            (u.email.toLowerCase() == cleanId ||
+                u.fullName.toLowerCase() == cleanId) &&
+            u.password == password,
       );
     } catch (_) {
       return null;
@@ -68,7 +75,9 @@ class MockDatabase {
   static bool checkIsLocked(String identifier) {
     final cleanId = identifier.trim().toLowerCase();
     final match = users.where(
-      (u) => u.email.toLowerCase() == cleanId || u.fullName.toLowerCase() == cleanId,
+      (u) =>
+          u.email.toLowerCase() == cleanId ||
+          u.fullName.toLowerCase() == cleanId,
     );
     if (match.isNotEmpty) {
       return match.first.isLocked;

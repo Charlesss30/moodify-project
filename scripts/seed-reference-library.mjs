@@ -28,9 +28,15 @@ try{
  for(const id of movieIds){
   if(movies.length===50)break;
   if(existingMovies.has(id))continue;
-  const d=await json('https://www.omdbapi.com/?'+new URLSearchParams({apikey:cfg.Omdb.ApiKey,i:id,plot:'short',type:'movie'}));
-  if(d.Response!=='True'||d.Type!=='movie'||d.imdbID!==id||!await imageAvailable(d.Poster))continue;
-  movies.push({id:'OMDB_'+id,title:d.Title,genre:d.Genre});
+  const tmdbToken=process.env.Tmdb__AccessToken||cfg.Tmdb?.AccessToken;
+  if(!tmdbToken)throw Error('TMDB access token is not configured.');
+  const tmdbHeaders={Authorization:'Bearer '+tmdbToken};
+  const found=await json('https://api.themoviedb.org/3/find/'+id+'?external_source=imdb_id',{headers:tmdbHeaders});
+  if(found.movie_results?.length!==1)continue;
+  const d=await json('https://api.themoviedb.org/3/movie/'+found.movie_results[0].id,{headers:tmdbHeaders});
+  if(d.imdb_id!==id||!d.poster_path||!await imageAvailable('https://image.tmdb.org/t/p/w500'+d.poster_path))continue;
+  // Keep the legacy key format understood by ExternalCatalog; metadata comes from TMDB.
+  movies.push({id:'OMDB_'+id,title:d.title,genre:d.genres.map(g=>g.name==='Science Fiction'?'Sci-Fi':g.name).join(', ')});
   if(movies.length%10===0)console.log('Verified movie posters:',movies.length);
  }
  const token=await json('https://accounts.spotify.com/api/token',{method:'POST',headers:{Authorization:'Basic '+Buffer.from(cfg.Spotify.ClientId+':'+cfg.Spotify.ClientSecret).toString('base64'),'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=client_credentials'});

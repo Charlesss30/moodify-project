@@ -37,6 +37,12 @@ namespace mood_recommendation.Models
         [MaxLength(40), Column("moodsource")]
         [BsonElement("moodSource")] public string? MoodSource { get; set; } = "manual";
 
+        [BsonElement("director"), MaxLength(500)] public string? Director { get; set; }
+
+        [BsonElement("trailerUrl")] public string? TrailerUrl { get; set; }
+
+        [BsonElement("ratingSource")] public string? RatingSource { get; set; }
+        [BsonElement("metadataSource")] public string? MetadataSource { get; set; }
         // Foreign Key
         [ForeignKey("NoiDungID")]
         [JsonIgnore]

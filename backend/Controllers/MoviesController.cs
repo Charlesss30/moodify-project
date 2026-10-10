@@ -75,7 +75,7 @@ namespace mood_recommendation.Controllers
                 {
                     NoiDungID = dto.NoiDungID.Trim(), TieuDe = dto.TieuDe.Trim(), LoaiNoiDung = "Movie",
                     HinhAnh = dto.HinhAnh, MoTa = dto.MoTa,
-                    Phim = new Phim { TheLoai = dto.TheLoai, DiemDanhGiaTB = dto.DiemDanhGiaTB, IMDBID = dto.IMDBID }
+                    Phim = new Phim { TMDBID = dto.TMDBID, RatingSource = dto.RatingSource, MetadataSource = dto.MetadataSource, TrailerUrl = string.IsNullOrWhiteSpace(dto.TrailerUrl) ? null : dto.TrailerUrl, Director = dto.Director, TheLoai = dto.TheLoai, DiemDanhGiaTB = dto.DiemDanhGiaTB, IMDBID = dto.IMDBID }
                 };
                 var moodError = await new GenreMoodService(_context).Apply(content, dto.TheLoai, dto.Valence, dto.Arousal, dto.MoodSource, true);
                 if (moodError != null) return BadRequest(new { message = moodError });
@@ -110,6 +110,11 @@ namespace mood_recommendation.Controllers
                 var moodError = await new GenreMoodService(_context).Apply(movie, dto.TheLoai, dto.Valence, dto.Arousal, dto.MoodSource, false);
                 if (moodError != null) return BadRequest(new { message = moodError });
                 movie.TieuDe = dto.TieuDe.Trim(); movie.HinhAnh = dto.HinhAnh; movie.MoTa = dto.MoTa;
+                movie.Phim.TrailerUrl = string.IsNullOrWhiteSpace(dto.TrailerUrl) ? null : dto.TrailerUrl;
+                movie.Phim.TMDBID = dto.TMDBID ?? movie.Phim.TMDBID;
+                movie.Phim.RatingSource = dto.RatingSource ?? movie.Phim.RatingSource;
+                movie.Phim.MetadataSource = dto.MetadataSource ?? movie.Phim.MetadataSource;
+                movie.Phim.Director = dto.Director ?? movie.Phim.Director;
                 movie.Phim.IMDBID = dto.IMDBID; movie.Phim.TheLoai = dto.TheLoai; movie.Phim.DiemDanhGiaTB = dto.DiemDanhGiaTB;
                 await _context.SaveContent(movie);
                 return Ok(movie);

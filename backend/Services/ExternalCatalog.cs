@@ -56,7 +56,7 @@ public sealed class ExternalCatalog(MongoStore db, IHttpClientFactory clients, I
                 item.MetadataStatus="unavailable";
                 if(e.StatusCode is 429 or 503)cache.Set("external-unavailable:Song",e.Message,TimeSpan.FromSeconds(e.RetryAfter??30));
                 cache.Set(key,item,TimeSpan.FromSeconds(30));
-            } catch(Exception e) when(e is HttpRequestException or JsonException or InvalidOperationException || e is OperationCanceledException && !ct.IsCancellationRequested) {
+            } catch(Exception e) when(e is HttpRequestException or JsonException or InvalidOperationException or KeyNotFoundException || e is OperationCanceledException && !ct.IsCancellationRequested) {
                 item.MetadataStatus="unavailable";
                 cache.Set(key,item,TimeSpan.FromSeconds(30));
             } finally {slots.Release();}
@@ -65,18 +65,10 @@ public sealed class ExternalCatalog(MongoStore db, IHttpClientFactory clients, I
     }
     private async Task LoadMovie(NoiDungGiaiTri item,CancellationToken ct)
     {
-        var apiKey=config["Omdb:ApiKey"];
-        if(string.IsNullOrWhiteSpace(apiKey))throw new InvalidOperationException("OMDb is not configured.");
-        var id=item.NoiDungID[5..];
-        using var response=await clients.CreateClient("Omdb").GetAsync("https://www.omdbapi.com/?apikey="+Uri.EscapeDataString(apiKey)+"&i="+Uri.EscapeDataString(id)+"&plot=short&type=movie",ct);
-        response.EnsureSuccessStatusCode();
-        using var doc=JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
-        var data=doc.RootElement;
-        string? Text(string key)=>data.TryGetProperty(key,out var v)&&v.ValueKind==JsonValueKind.String&&v.GetString()!="N/A"?v.GetString():null;
-        if(Text("Response")!="True"||Text("Type")!="movie"||Text("imdbID")!=id)throw new InvalidOperationException("Movie is unavailable.");
-        item.TieuDe=Text("Title")??id;item.MoTa=Text("Plot");
-        item.HinhAnh=Uri.TryCreate(Text("Poster"),UriKind.Absolute,out var poster)&&poster.Scheme=="https"?poster.AbsoluteUri:null;
-        item.Phim=new Phim {NoiDungID=item.NoiDungID,IMDBID=id,TheLoai=Text("Genre"),DiemDanhGiaTB=decimal.TryParse(Text("imdbRating"),NumberStyles.Number,CultureInfo.InvariantCulture,out var rating)?rating:null,MoodSource="unassigned"};
+        var data=await new TmdbClient(clients.CreateClient("Tmdb"),config).Lookup(item.NoiDungID[5..],ct)
+            ?? throw new InvalidOperationException("Movie is unavailable on TMDB.");
+        item.TieuDe=data.Title;item.MoTa=data.Description;item.HinhAnh=data.Poster;
+        item.Phim=new Phim {NoiDungID=item.NoiDungID,IMDBID=data.ImdbId,TMDBID=data.TmdbId,Director=data.Director,TheLoai=data.Genre,DiemDanhGiaTB=data.Rating,RatingSource="TMDB",MetadataSource="TMDB",TrailerUrl=data.TrailerUrl,MoodSource="unassigned"};
         var suggestion=await new GenreMoodService(db).Suggest(item.Phim.TheLoai,"Movie");
         if(suggestion.Valence.HasValue){item.Valence=suggestion.Valence.Value;item.Arousal=suggestion.Arousal!.Value;item.MoodAvailable=true;item.Phim.MoodSource="genre-default";item.MoodRuleVersion=suggestion.RuleVersion;}
     }

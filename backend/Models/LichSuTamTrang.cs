@@ -12,6 +12,20 @@ namespace mood_recommendation.Models
         [BsonExtraElements, System.Text.Json.Serialization.JsonIgnore]
         public BsonDocument ExtraElements { get; set; } = new();
 
+        [BsonElement("recommendationId")] public string? RecommendationId { get; set; }
+        [BsonElement("recommendedItems")] public List<RecommendationSnapshot>? RecommendedItems { get; set; }
+        [BsonElement("algorithm")] public string? Algorithm { get; set; }
+        [BsonElement("source")] public string? Source { get; set; }
+        [BsonElement("analysisId")] public string? AnalysisId { get; set; }
+        [BsonElement("analyzerVersion")] public string? AnalyzerVersion { get; set; }
+        [BsonElement("mappingVersion")] public string? MappingVersion { get; set; }
+        [BsonElement("analysisSource")] public string? AnalysisSource { get; set; }
+        [BsonElement("decisionSource")] public string? DecisionSource { get; set; }
+        [BsonElement("moodConfigHash")] public string? MoodConfigHash { get; set; }
+        [BsonElement("analysisExpiresAt")] public DateTime? AnalysisExpiresAt { get; set; }
+        [BsonElement("recommendationRequestHash")] public string? RecommendationRequestHash { get; set; }
+        [BsonElement("recommendationResponseJson")] public string? RecommendationResponseJson { get; set; }
+
         [Key, BsonId]
         [Column("lichsuid")]
         public long LichSuID { get; set; }
@@ -43,5 +57,14 @@ namespace mood_recommendation.Models
         [ForeignKey("TamTrangID")]
         [BsonIgnore]
         public TamTrang? TamTrang { get; set; }
+    }
+}
+
+namespace mood_recommendation.Models {
+    public sealed class RecommendationSnapshot {
+        [BsonElement("contentId")] public string NoiDungID { get; set; } = "";
+        [BsonElement("title")] public string TieuDe { get; set; } = "";
+        [BsonElement("contentType")] public string LoaiNoiDung { get; set; } = "";
+        [BsonElement("imageUrl")] public string? HinhAnh { get; set; }
     }
 }

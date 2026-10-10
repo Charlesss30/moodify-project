@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace mood_recommendation.DTOs
 {
-    public class MovieRequestDto
+    public class MovieRequestDto : IValidatableObject
     {
         [Required]
         [StringLength(100)]
@@ -15,7 +15,16 @@ namespace mood_recommendation.DTOs
         [Url]
         public string? HinhAnh { get; set; }
 
+        [StringLength(2048)] public string? TrailerUrl { get; set; }
+        public IEnumerable<ValidationResult> Validate(ValidationContext context) {
+            if (!string.IsNullOrWhiteSpace(TrailerUrl) && !mood_recommendation.Services.TrailerLookup.ValidUrl(TrailerUrl))
+                yield return new ValidationResult("Use a valid HTTPS YouTube video URL.", new[] { nameof(TrailerUrl) });
+        }
         public string? MoTa { get; set; }
+        [RegularExpression(@"^[1-9][0-9]{0,8}$")] public string? TMDBID { get; set; }
+        [RegularExpression("^(TMDB|IMDb|Manual|Legacy)$")] public string? RatingSource { get; set; }
+        [RegularExpression("^(TMDB|OMDb|Manual|Legacy)$")] public string? MetadataSource { get; set; }
+        [StringLength(500)] public string? Director { get; set; }
 
         [StringLength(255)]
         public string? TheLoai { get; set; }

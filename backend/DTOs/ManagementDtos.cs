@@ -28,12 +28,17 @@ public class ContentMoodDto
 }
 public class RecommendationDto
 {
+    [Required, RegularExpression("^(mood|content|hybrid)$")] public string Mode { get; set; } = "mood";
+    [Required, RegularExpression("^(manual|rule_based)$")] public string Source { get; set; } = "manual";
+    [StringLength(64)] public string? AnalysisId { get; set; }
     [Range(1, int.MaxValue)] public int TamTrangID { get; set; }
     [RegularExpression("^(Movie|Music)$")] public string? LoaiNoiDung { get; set; }
     [Range(1, 50)] public int Limit { get; set; } = 12;
+    public bool Balanced { get; set; }
 }
 public class RatingDto
 {
+    [StringLength(64)] public string? RecommendationId { get; set; }
     [Required, StringLength(100)] public string NoiDungID { get; set; } = "";
     [Range(1, 5)] public int SoSao { get; set; }
     [StringLength(2000)] public string? NhanXet { get; set; }

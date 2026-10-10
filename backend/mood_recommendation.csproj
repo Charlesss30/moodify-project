@@ -19,5 +19,7 @@
 
   <ItemGroup>
     <Content Update="Data/mongo-schema.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Data/emotion-mood-mapping.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Training/RoBERTa_large.template.ipynb" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

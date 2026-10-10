@@ -1,11 +1,13 @@
 import 'mood_discovery_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../core/colors.dart';
-import '../core/mock_database.dart';
+import '../models/session_user.dart';
 
 class HomeScreen extends StatefulWidget {
-  final UserAccount currentUser;
+  final SessionUser currentUser;
   final VoidCallback onLogoutConfirmed;
 
   const HomeScreen({
@@ -21,7 +23,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _activeTab = 0;
 
-
   // UC03 - Dòng 1 & 2: Nhấp chọn đăng xuất -> Hiển thị hộp thoại xác nhận
   void _showLogoutConfirmationDialog() {
     showDialog(
@@ -30,7 +31,9 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (dialogContext) {
         return AlertDialog(
           backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           contentPadding: const EdgeInsets.all(24),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -39,15 +42,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.danger.withOpacity(0.1),
+                  color: AppColors.danger.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(LucideIcons.logOut, color: AppColors.danger, size: 22),
+                child: const Icon(
+                  LucideIcons.logOut,
+                  color: AppColors.danger,
+                  size: 22,
+                ),
               ),
               const SizedBox(height: 16),
               const Text(
                 'Xác nhận đăng xuất',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -64,11 +75,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       onPressed: () => Navigator.pop(dialogContext),
                       style: OutlinedButton.styleFrom(
                         backgroundColor: AppColors.surfaceSecondary,
-                        side: BorderSide(color: Colors.white.withOpacity(0.1)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.1),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
-                      child: const Text('Hủy', style: TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+                      child: const Text(
+                        'Hủy',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -77,18 +98,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: ElevatedButton(
                       onPressed: () {
                         Navigator.pop(dialogContext); // Đóng modal
-                        widget.onLogoutConfirmed();    // Hủy phiên làm việc
+                        widget.onLogoutConfirmed(); // Hủy phiên làm việc
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.danger,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
-                      child: const Text('Đăng xuất', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                      child: const Text(
+                        'Đăng xuất',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ],
-              )
+              ),
             ],
           ),
         );
@@ -110,7 +140,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   // Header hiển thị tên user và vai trò từ UC02
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -118,22 +151,43 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             const CircleAvatar(
                               radius: 20,
-                              backgroundImage: NetworkImage('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop'),
+                              backgroundImage: NetworkImage(
+                                'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Xin chào [${widget.currentUser.role}],', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                                Text(widget.currentUser.fullName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                                Text(
+                                  'Xin chào [${widget.currentUser.role}],',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                Text(
+                                  widget.currentUser.fullName,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
                               ],
-                            )
+                            ),
                           ],
                         ),
                         IconButton(
                           onPressed: _showLogoutConfirmationDialog, // Nút kích hoạt UC03
-                          icon: const Icon(LucideIcons.logOut, size: 18, color: AppColors.textSecondary),
-                          style: IconButton.styleFrom(backgroundColor: AppColors.surfaceSecondary),
+                          icon: const Icon(
+                            LucideIcons.logOut,
+                            size: 18,
+                            color: AppColors.textSecondary,
+                          ),
+                          style: IconButton.styleFrom(
+                            backgroundColor: AppColors.surfaceSecondary,
+                          ),
                         ),
                       ],
                     ),
@@ -141,7 +195,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                    child: Text('How are you feeling today?', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                    child: Text(
+                      'How are you feeling today?',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
                   ),
 
                   // Card AI Mood Analysis
@@ -152,36 +213,68 @@ class _HomeScreenState extends State<HomeScreen> {
                       decoration: BoxDecoration(
                         color: AppColors.surface,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.accentPrimary.withOpacity(0.2)),
+                        border: Border.all(
+                          color: AppColors.accentPrimary.withValues(alpha: 0.2),
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: const [
-                              Icon(LucideIcons.sparkles, color: AppColors.accentPrimary, size: 18),
+                              Icon(
+                                LucideIcons.sparkles,
+                                color: AppColors.accentPrimary,
+                                size: 18,
+                              ),
                               SizedBox(width: 8),
-                              Text('Khám phá theo tâm trạng', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                              Text(
+                                'Khám phá theo tâm trạng',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 10),
-                          const Text('Chọn tâm trạng để nhận gợi ý phim và nhạc phù hợp.'),
+                          const Text(
+                            'Chọn tâm trạng để nhận gợi ý phim và nhạc phù hợp.',
+                          ),
                           Align(
                             alignment: Alignment.centerRight,
                             child: ElevatedButton(
-                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MoodDiscoveryScreen())),
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const MoodDiscoveryScreen(),
+                                ),
+                              ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.accentPrimary,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
                               ),
-                              child: const Text('Chọn tâm trạng', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                              child: const Text(
+                                'Chọn tâm trạng',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
-                          )
+                          ),
                         ],
                       ),
                     ),
-                  )
+                  ),
                 ],
               ),
             ),
@@ -195,8 +288,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               decoration: BoxDecoration(
-                color: AppColors.surface.withOpacity(0.9),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                color: AppColors.surface.withValues(alpha: 0.9),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -208,7 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-          )
+          ),
         ],
       ),
     );
@@ -219,21 +314,44 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: () {
         if (index == 1 || index == 2) {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => MoodDiscoveryScreen(showHistory: index == 2)));
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MoodDiscoveryScreen()),
+          );
         } else if (index == 3) {
-          showDialog<void>(context: context, builder: (context) => AlertDialog(
-            title: Text(widget.currentUser.fullName),
-            content: Text(widget.currentUser.email),
-            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Đóng'))],
-          ));
-        } else { setState(() => _activeTab = index); }
+          showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(widget.currentUser.fullName),
+              content: Text(widget.currentUser.email),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Đóng'),
+                ),
+              ],
+            ),
+          );
+        } else {
+          setState(() => _activeTab = index);
+        }
       },
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 20, color: active ? AppColors.accentPrimary : AppColors.textSecondary),
+          Icon(
+            icon,
+            size: 20,
+            color: active ? AppColors.accentPrimary : AppColors.textSecondary,
+          ),
           const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 10, color: active ? AppColors.accentPrimary : AppColors.textSecondary)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: active ? AppColors.accentPrimary : AppColors.textSecondary,
+            ),
+          ),
         ],
       ),
     );

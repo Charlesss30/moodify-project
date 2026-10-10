@@ -25,6 +25,14 @@ public class UsersController(MongoStore db) : ControllerBase
         });
     }
 
+    [HttpGet("{id:int}/activity")]
+    public async Task<IActionResult> Activity(int id, [FromQuery] string kind = "interactions", [FromQuery] int page = 1)
+    {
+        if (page < 1 || page > 100000 || !new[] { "interactions", "recommendations", "ratings" }.Contains(kind)) return BadRequest();
+        if (await db.Find<mood_recommendation.Models.TaiKhoan>(id) is null) return NotFound();
+        return Ok(await ActivityQuery.List(db, id, kind, page));
+    }
+
     [HttpPut("{id:int}/access")]
     public async Task<IActionResult> Access(int id, UserAccessDto dto)
     {

@@ -52,8 +52,18 @@ public sealed class MongoStore
         await Collection<Phim>().Indexes.CreateOneAsync(new CreateIndexModel<Phim>(new BsonDocument("genreIds",1)));
         await Collection<Nhac>().Indexes.CreateOneAsync(new CreateIndexModel<Nhac>(new BsonDocument("genreId",1)));
         await Collection<LichSuTamTrang>().Indexes.CreateOneAsync(new CreateIndexModel<LichSuTamTrang>(new BsonDocument{{"accountId",1},{"createdAt",-1}}));
+        await Collection<LichSuTamTrang>().Indexes.CreateOneAsync(new CreateIndexModel<LichSuTamTrang>(
+            new BsonDocument("analysisId", 1),
+            new CreateIndexOptions<LichSuTamTrang>
+            {
+                Unique = true,
+                PartialFilterExpression = new BsonDocument("analysisId", new BsonDocument("$type", "string"))
+            }));
         await Collection<DanhGia>().Indexes.CreateOneAsync(new CreateIndexModel<DanhGia>(new BsonDocument{{"accountId",1},{"contentId",1}}));
         await Collection<DanhGia>().Indexes.CreateOneAsync(new CreateIndexModel<DanhGia>(new BsonDocument("contentId",1)));
+        foreach (var name in new[] { "interactions", "ratings" })
+            await Database.GetCollection<BsonDocument>(name).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument { ["accountId"] = 1, ["createdAt"] = -1, ["_id"] = -1 }));
+        await Collection<LichSuTamTrang>().Indexes.CreateOneAsync(new CreateIndexModel<LichSuTamTrang>(new BsonDocument { ["accountId"] = 1, ["recommendationId"] = 1 }));
         // Finish interrupted deletes / remove incomplete inserts after a process restart.
         foreach(var item in await Collection<NoiDungGiaiTri>().Find(x=>x.Deleted).ToListAsync()) await DeleteContent(item.NoiDungID);
     }

@@ -476,7 +476,7 @@ if (loginForm) {
                 JSON.stringify(currentUser)
             );
 
-            if (["admin", "quantrivien"].includes(String(currentUser.vaiTro).toLowerCase())) {
+            if (["admin", "quantrivien", "aiengineer"].includes(String(currentUser.vaiTro).toLowerCase())) {
                 const adminUrl = new URL(window.location.origin);
                 adminUrl.port = '5174';
                 window.location.replace(adminUrl.href);

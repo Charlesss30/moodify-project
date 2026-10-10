@@ -12,6 +12,7 @@ namespace mood_recommendation.Models
         [BsonExtraElements, System.Text.Json.Serialization.JsonIgnore]
         public BsonDocument ExtraElements { get; set; } = new();
 
+        [BsonElement("recommendationId")] public string? RecommendationId { get; set; }
         [Key, BsonId]
         [Column("danhgiaid")]
         public long DanhGiaID { get; set; }

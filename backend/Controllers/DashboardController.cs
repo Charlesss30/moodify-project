@@ -27,10 +27,25 @@ public class DashboardController(MongoStore db, ExternalCatalog external) : Cont
     public async Task<IActionResult> Feedback([FromQuery] int page = 1)
     {
         if (page < 1 || page > 100000) return BadRequest();
-        return Ok(new { total = await db.DanhGias.CountAsync(), page, pageSize = 50,
-            items = await db.DanhGias.OrderByDescending(x => x.ThoiGian).ThenByDescending(x => x.DanhGiaID)
-                .Skip((page - 1) * 50).Take(50).Select(x => new {
-                    x.DanhGiaID, x.NoiDungID, x.TaiKhoanID, x.SoSao, x.NhanXet, x.ThoiGian
-                }).ToListAsync() });
+        var ratings = await db.DanhGias.OrderByDescending(x=>x.ThoiGian).ThenByDescending(x=>x.DanhGiaID)
+            .Skip((page-1)*50).Take(50).ToListAsync();
+        var ids = ratings.Select(x=>x.NoiDungID).Distinct().ToArray();
+        var contents = (await db.Hydrate(await db.NoiDungGiaiTris.Where(x=>ids.Contains(x.NoiDungID)).ToListAsync()))
+            .ToDictionary(x=>x.NoiDungID);
+        foreach (var id in ids.Where(id=>!contents.ContainsKey(id)))
+        {
+            var item = await external.Get(id, HttpContext.RequestAborted);
+            if (item?.MetadataStatus == "available") contents[id] = item;
+        }
+        var accountIds = ratings.Select(x=>x.TaiKhoanID).Distinct().ToArray();
+        var accounts = (await db.TaiKhoans.Where(x=>accountIds.Contains(x.TaiKhoanID)).ToListAsync()).ToDictionary(x=>x.TaiKhoanID,x=>x.TenDangNhap);
+        return Ok(new { total=await db.DanhGias.CountAsync(), page, pageSize=50,
+            items=ratings.Select(x=> {
+                var c=contents.GetValueOrDefault(x.NoiDungID);
+                return new {x.DanhGiaID,x.NoiDungID,x.TaiKhoanID,x.SoSao,x.NhanXet,x.ThoiGian,
+                    username=accounts.GetValueOrDefault(x.TaiKhoanID),
+                    content=c==null?null:new {id=c.NoiDungID,title=c.TieuDe,imageUrl=c.HinhAnh,type=c.LoaiNoiDung,
+                        artist=c.Nhac?.TenNgheSi,album=c.Nhac?.Album,genre=c.Nhac?.Genre??c.Phim?.TheLoai}};
+            }) });
     }
 }

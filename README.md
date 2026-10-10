@@ -1,315 +1,188 @@
-> Cập nhật 25/09/2026: backend/admin đã chuyển sang MongoDB. Xem [hướng dẫn hiện tại](docs/MONGODB.md). Các mô tả PostgreSQL/SQL phía dưới là lịch sử trước khi chuyển.
+﻿# Moodify — Gợi ý phim và âm nhạc theo tâm trạng
 
-# Moodify
+Hệ thống gồm Flutter, website Admin/AIEngineer, ASP.NET Core API và Python inference RoBERTa. Dữ liệu nghiệp vụ dùng **MongoDB**, phim tích hợp **TMDB**, nhạc tích hợp **Spotify**. Repo không chứa database cá nhân, file phim/nhạc hay trọng số model.
 
-Moodify là hệ thống đề xuất nội dung theo tâm trạng, gồm ba thành phần:
+## Chức năng
 
-- `backend/`: ASP.NET Core Web API + PostgreSQL.
-- `admin-web/`: website quản trị HTML5/CSS3/JavaScript, chạy bằng Vite.
-- `mobile-app/`: ứng dụng Flutter cho Android/Web/Windows.
+- User: đăng ký/đăng nhập; quiz emoji; khám phá mô tả tiếng Anh hoặc chọn mood; thư viện; chi tiết phim/nhạc, trailer YouTube, Spotify player và liên kết gốc; lịch sử tương tác; đánh giá 1–5 sao, nhận xét trong chi tiết.
+- Admin: nội dung, thể loại, người dùng, mood/vùng VA; Feedback; Users → Activity; Recommendations và quản lý vòng đời model.
+- AIEngineer: AI overview, Models, Emotion mapping, Evaluation, Datasets, Training jobs, Feedback analytics, Inference lab, Recommendations.
+- Recommender: Mood Matching + Content-based + Collaborative Filtering; phản hồi mới cập nhật hồ sơ và thứ hạng ở yêu cầu tiếp theo.
 
-## Cập nhật admin và gợi ý
-
-Đã thêm JWT, phân quyền server, quản lý người dùng/tâm trạng, thống kê, lịch sử/đánh giá và gợi ý theo Valence/Arousal. Xem [phạm vi, cấu hình, kiểm thử và phần còn thiếu](docs/IMPLEMENTATION.md).
-
-## Sơ đồ hoạt động
-
-```text
-Flutter App / Moodify User Web
-            |
-            v
-    Backend API :5170
-            |
-            v
-       PostgreSQL
-
-Admin Web :5174 ---> Backend API :5170
-```
-
-## Yêu cầu môi trường
-
-Cài đặt các công cụ sau:
-
-- .NET SDK 10
-- Node.js và npm
-- Flutter SDK, Dart SDK tương thích với `mobile-app/pubspec.yaml`
-- PostgreSQL
-- Android Studio và Android Emulator nếu chạy Android
-
-## Cấu hình PostgreSQL
-
-Backend đang dùng connection string trong `backend/appsettings.json`:
-
-```text
-Host=localhost;Port=5432;Database=mood_recommendation;Username=postgres;Password=123
-```
-
-Hãy tạo database `mood_recommendation`, sau đó cập nhật username/password trong file cấu hình nếu máy của bạn khác thiết lập trên.
-
-Không commit mật khẩu thật lên repository công khai. Với môi trường production, nên dùng User Secrets hoặc biến môi trường.
-
-## 1. Chạy Backend API
-
-Mở terminal thứ nhất:
-
-```powershell
-cd backend
-dotnet restore
-dotnet run --launch-profile http
-```
-
-Backend chạy tại:
-
-```text
-http://localhost:5170
-```
-
-Swagger:
-
-```text
-http://localhost:5170/swagger
-```
-
-Các API chính:
-
-```text
-POST   /api/Auth/login
-POST   /api/Auth/register
-
-GET    /api/Genres
-POST   /api/Genres
-GET    /api/Genres/{id}
-PUT    /api/Genres/{id}
-DELETE /api/Genres/{id}
-
-GET    /api/Movies
-POST   /api/Movies
-GET    /api/Movies/{id}
-PUT    /api/Movies/{id}
-DELETE /api/Movies/{id}
-
-GET    /api/Music
-POST   /api/Music
-GET    /api/Music/{id}
-PUT    /api/Music/{id}
-DELETE /api/Music/{id}
-```
-
-Backend cũng phục vụ Moodify User Web tại `http://localhost:5170`.
-
-## 2. Chạy Admin Website
-
-Mở terminal thứ hai:
-
-```powershell
-cd admin-web
-npm install
-npm run dev
-```
-
-Admin Web chạy tại:
-
-```text
-http://localhost:5174
-```
-
-Admin Web đã cấu hình proxy:
-
-```text
-/api -> http://localhost:5170/api
-```
-
-Vì vậy frontend gọi API qua `/api`, còn Vite chuyển tiếp request tới backend port `5170`.
-
-### Đăng nhập Admin
-
-Có thể đăng nhập theo một trong hai cách:
-
-1. Mở `http://localhost:5170`.
-2. Dùng tài khoản:
-   - Email: `admin@gmail.com`
-   - Mật khẩu: `123`
-3. Nếu tài khoản có role `QuanTriVien`, hệ thống tự chuyển sang `http://localhost:5174`.
-4. Backend cấp phiên chuyển trang qua cookie HttpOnly dùng một lần; Dashboard tự tiếp nhận phiên, không cần đăng nhập lại.
-
-Hoặc mở trực tiếp `http://localhost:5174` và đăng nhập bằng cùng tài khoản.
-
-### Lệnh kiểm tra Admin Web
-
-```powershell
-npm run build
-npm run lint
-npm run preview
-```
-
-## 3. Chạy Flutter Mobile App
-
-Mở terminal thứ ba:
-
-```powershell
-cd mobile-app
-flutter pub get
-flutter run
-```
-
-Xem thiết bị khả dụng:
-
-```powershell
-flutter devices
-```
-
-Chạy Android emulator:
-
-```powershell
-flutter run -d android
-```
-
-Chạy Flutter Web:
-
-```powershell
-flutter run -d chrome --web-port 8080
-```
-
-### Địa chỉ API theo nền tảng
-
-Cấu hình hiện tại nằm tại `mobile-app/lib/core/api_service.dart`:
-
-- Flutter Web: `http://localhost:5170`
-- Android Emulator: `http://10.0.2.2:5170`
-- Windows/Desktop: `http://localhost:5170`
-
-Nếu chạy trên điện thoại thật, `localhost` là chính điện thoại. Hãy đổi base URL thành địa chỉ IP LAN của máy chạy backend, ví dụ:
-
-```text
-http://192.168.1.100:5170
-```
-
-Điện thoại và máy tính phải cùng mạng, đồng thời firewall phải cho phép port `5170`.
-
-## Tài khoản demo
-
-```text
-Email: admin@gmail.com
-Mật khẩu: 123
-Role: QuanTriVien
-```
-
-Không dùng tài khoản/mật khẩu demo này trên production.
-
-## Body API mẫu
-
-### Login
-
-```json
-{
-  "identifier": "admin@gmail.com",
-  "matKhau": "123"
-}
-```
-
-### Tạo thể loại
-
-```json
-{
-  "TenTheLoai": "Kinh dị"
-}
-```
-
-### Tạo phim
-
-```json
-{
-  "NoiDungID": "MOV004",
-  "TieuDe": "Tên phim",
-  "HinhAnh": "https://example.com/poster.jpg",
-  "MoTa": "Mô tả phim",
-  "TheLoai": "Drama",
-  "DiemDanhGiaTB": 8.5
-}
-```
-
-### Tạo bài hát
-
-```json
-{
-  "NoiDungID": "SONG004",
-  "TieuDe": "Tên bài hát",
-  "TenNgheSi": "Tên nghệ sĩ",
-  "HinhAnh": "https://example.com/cover.jpg",
-  "Genre": "Pop",
-  "Duration": 210
-}
-```
-
-## Thứ tự chạy đề xuất
-
-1. Khởi động PostgreSQL.
-2. Chạy Backend API tại port `5170`.
-3. Chạy Admin Web tại port `5174`.
-4. Chạy Flutter App nếu cần.
-
-## Xử lý lỗi thường gặp
-
-### Port 5170 đã được sử dụng
-
-Kiểm tra process:
-
-```powershell
-Get-NetTCPConnection -LocalPort 5170 -State Listen
-```
-
-### Port 5174 đã được sử dụng
-
-Kiểm tra process:
-
-```powershell
-Get-NetTCPConnection -LocalPort 5174 -State Listen
-```
-
-Đóng process không cần thiết hoặc dùng đúng server đang chạy.
-
-### Admin Web không lấy được dữ liệu
-
-Kiểm tra:
-
-1. Backend có chạy tại `http://localhost:5170` không.
-2. Mở Swagger để kiểm tra API.
-3. Admin Web có chạy tại `http://localhost:5174` không.
-4. PostgreSQL có chạy không.
-5. Connection string có đúng không.
-6. Mở Developer Tools của trình duyệt để xem lỗi Network/Console.
-
-### Flutter không kết nối được API
-
-- Android Emulator phải dùng `10.0.2.2:5170`.
-- Điện thoại thật phải dùng IP LAN của máy tính.
-- Backend phải lắng nghe địa chỉ có thể truy cập từ thiết bị.
-- Kiểm tra firewall và hai thiết bị có cùng mạng hay không.
+AI hiện hỗ trợ **tiếng Anh**, cần người dùng xác nhận mood và có fallback thủ công. Mapping còn thử nghiệm. Training jobs chuẩn bị notebook Colab/nhận báo cáo, **không tự train GPU trên web**. Feedback Loop không phải Reinforcement Learning.
 
 ## Cấu trúc repository
 
-```text
-moodify-project/
-├── backend/
-│   ├── Controllers/
-│   ├── Data/
-│   ├── DTOs/
-│   ├── Models/
-│   ├── Program.cs
-│   └── mood_recommendation.csproj
-├── admin-web/
-│   ├── src/
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
-├── mobile-app/
-│   ├── lib/
-│   ├── android/
-│   ├── pubspec.yaml
-│   └── test/
-└── README.md
+| Thư mục | Vai trò |
+|---|---|
+| backend | .NET 10 API, schema MongoDB, gateway AI, recommender |
+| admin-web | Dashboard Vite/JavaScript theo vai trò |
+| mobile-app | Flutter: Trang chủ, Khám phá, Thư viện, Lịch sử, Cá nhân |
+| ai-service | Python/FastAPI, inference RoBERTa local |
+| code-train | Notebook; dataset và weights cấp riêng |
+| scripts | Runner local, backup/restore, bảo trì |
+| tests | Kiểm thử tích hợp .NET và notebook |
+| docs | Hướng dẫn, báo cáo và bằng chứng theo ngày |
+
+## 1. Chuẩn bị
+
+Cần .NET SDK 10, MongoDB tại `127.0.0.1:27017`, Node.js 24 (đã dùng trên máy phát triển), npm, Flutter phù hợp `mobile-app/pubspec.yaml`. Android cần Android SDK/emulator. AI cần Python và artifact theo [hướng dẫn inference](ai-service/README.md).
+
+Các lệnh PowerShell bắt đầu từ root repository:
+
+```powershell
+dotnet restore backend/mood_recommendation.csproj
+dotnet build tests/Moodify.Integration.csproj
+npm ci --prefix admin-web
+npm ci --prefix scripts
+cd mobile-app
+flutter pub get
+cd ..
+Copy-Item backend/appsettings.Development.example.json backend/appsettings.Development.json
 ```
 
-## Spotify (backend + admin)
+Điền `Tmdb:AccessToken`, `Spotify:ClientId`, `Spotify:ClientSecret` trong file Development thật, đã gitignore. Có thể dùng biến môi trường `Tmdb__AccessToken`, `Spotify__ClientId`, `Spotify__ClientSecret`, `Mongo__ConnectionString`, `Mongo__Database`, `Jwt__Key`. Không đưa credential vào Flutter/JavaScript trình duyệt.
 
-Xem [hướng dẫn Spotify](docs/SPOTIFY.md) cho cấu hình, luồng nhập nhạc → kiểm duyệt tâm trạng → database → quản lý/gợi ý và các kiểm thử. Spotify là nguồn tích hợp nhạc hiện tại; dữ liệu và mã tích hợp Zing cũ đã được xóa. Kết nối hiện lấy token thành công nhưng Spotify yêu cầu tài khoản chủ app có Premium để truy cập danh mục. Không triển khai Spotify trên mobile trong đợt này.
+Development không có JWT key sẽ sinh key tạm; restart khiến phiên cũ hết hiệu lực. Ngoài Development cần JWT key tối thiểu 32 byte. Đây là hướng dẫn local, chưa phải cấu hình production.
+
+## 2. Database và tài khoản
+
+Backend tự tạo collection/index/validator khi database trống, **không tự tạo Admin hoặc thư viện demo**.
+
+### Khôi phục bản `database_backup` bằng mongorestore
+
+Bản backup được cấp riêng có cấu trúc `database_backup/mood_recommendation/*.bson` và `*.metadata.json`. Cài **MongoDB Community Server** và **MongoDB Database Tools**, bật MongoDB tại `127.0.0.1:27017`; khôi phục trước khi chạy backend. Database đích `mood_recommendation` phải chưa có dữ liệu. Từ root project, sau khi giải nén đúng thư mục:
+
+```powershell
+mongorestore --uri="mongodb://127.0.0.1:27017" --nsInclude="mood_recommendation.*" --stopOnError ".\database_backup"
+```
+
+Đường dẫn cuối là thư mục **cha chứa `mood_recommendation`**. Kiểm tra lệnh kết thúc thành công, có số bản ghi được restore và `0 document(s) failed to restore`; sau đó mở MongoDB Compass xem các collection. Đặt `Mongo:Database` thành `mood_recommendation` trong cấu hình backend. Không tự thêm `--drop` hoặc chạy lặp trên DB đã có dữ liệu.
+
+Xem [hướng dẫn khôi phục đầy đủ](docs/MONGODB_RESTORE.md) cho cách cài tools, chọn đường dẫn khác, đổi tên DB đích, đăng nhập và chạy app. Backup không chứa model AI hoặc khóa TMDB/Spotify; vẫn cần cấu hình riêng theo các mục bên dưới. Cú pháp dùng theo [tài liệu mongorestore chính thức](https://www.mongodb.com/docs/database-tools/mongorestore/).
+
+### Nếu nhận bản JSON do script của project xuất
+
+Chỉ dùng các lệnh dưới khi bản backup có `manifest.json` và các file collection JSON do `mongo-backup.mjs` tạo. **Không dùng chúng cho folder `.bson` ở trên.** Import vào database mới, trống, rồi cấu hình `Mongo:Database` trỏ đến đó:
+
+```powershell
+node scripts/mongo-backup.mjs import --from 'D:/duong-dan/backup' --database moodify_restored
+node scripts/mongo-backup.mjs import --from 'D:/duong-dan/backup' --database moodify_restored --apply
+```
+
+Lệnh đầu kiểm tra, lệnh sau áp dụng. Importer từ chối DB có collection. Backup chứa tài khoản/password hash/lịch sử, không đưa lên GitHub. Không chạy hàng loạt migration/seed như lệnh cài mới.
+
+Nếu tạo dữ liệu mới:
+
+1. Chạy backend, đăng ký ở `http://localhost:5170`.
+2. Chủ database mở MongoDB Compass → đúng database → `accounts`, tìm đúng tài khoản vừa đăng ký và đổi `role` thành `Admin`. Không sửa password hash. Đăng nhập lại.
+3. Admin vào Users cấp `AIEngineer` cho tài khoản kỹ sư đã đăng ký.
+4. Admin tạo mood/vùng VA, thể loại và thêm phim/nhạc, rà soát nhãn trước khi gợi ý.
+5. Kỹ sư thiết lập mapping phù hợp mood thực tế. Mapping 13/28 trong tài liệu là snapshot local 09/10/2026, không tự áp dụng khi clone repo.
+
+Repo không phân phối mật khẩu thật hoặc Admin mặc định.
+
+## 3. Chạy backend và dashboard
+
+Runner Windows, sau khi MongoDB/dependency sẵn sàng:
+
+```powershell
+./Start.ps1 -WithoutAI
+./scripts/moodify-local.ps1 -Action Status
+./Stop.ps1
+```
+
+Backend: `http://127.0.0.1:5170`; dashboard: `http://127.0.0.1:5174`; log: `%LOCALAPPDATA%/Moodify/logs`. Runner kiểm tra DB chỉ đọc, không chiếm cổng tiến trình khác và không tự chạy cùng Windows. Stop không dừng MongoDB.
+
+Hoặc chạy thủ công, mỗi lệnh ở một terminal, `Ctrl+C` để dừng:
+
+```powershell
+dotnet run --project backend/mood_recommendation.csproj --launch-profile http
+npm run dev --prefix admin-web
+```
+
+Không chạy runner và dotnet run cùng cổng. Swagger Development: `http://localhost:5170/swagger`. Đăng nhập tại `http://localhost:5170`: Admin/AIEngineer vào dashboard đúng vai trò, nhận phiên một lần không đăng nhập lại. Giữ nhất quán localhost hoặc 127.0.0.1 trong luồng chuyển trang.
+
+## 4. Chạy Flutter
+
+```powershell
+cd mobile-app
+flutter devices
+flutter run -d <device-id>
+# Hoặc web:
+flutter run -d chrome --web-port 8080
+```
+
+Thay `<device-id>` bằng ID từ flutter devices. Android emulator mặc định gọi `http://10.0.2.2:5170`; Web/Windows gọi `http://localhost:5170`.
+
+Điện thoại thật: cùng mạng với máy backend, firewall cho phép cổng 5170; dừng stack trước khi thay ListenAddress:
+
+```powershell
+# Tại root:
+./Start.ps1 -WithoutAI -ListenAddress 0.0.0.0
+# Tại mobile-app, thay IP đúng của máy backend:
+flutter run -d <device-id> --dart-define=API_BASE_URL=http://192.168.1.100:5170
+```
+
+## 5. Bật AI
+
+Khôi phục artifact được cấp riêng tại `code-train/train-KLCN/output/roberta_large_asl_en_01/`, gồm `best_model`, `deployment`, `run_config.json`. Không chỉ chép model.safetensors. Xem [artifact](code-train/README.md) và [Python environment](ai-service/README.md).
+
+1. Cài `ai-service/.venv`, đặt artifact đúng hash/version, chạy `./Start.ps1` không có WithoutAI.
+2. Đợi inference ready cổng 8001. Đăng nhập Admin/AIEngineer → Models → Validate → Activate. Runtime ready và registry active là hai điều kiện riêng; runner không tự Activate.
+3. AIEngineer → Emotion mapping để duyệt nhãn; có thể giữ Unmapped khi chưa có mood tương ứng. Inference lab thử câu tiếng Anh, Evaluation xem báo cáo.
+4. Datasets → Training jobs: tải bundle/notebook, chạy Colab bên ngoài rồi nhập báo cáo. Tạo job không tự triển khai model mới.
+
+Nếu chạy từng terminal, Python cần `AI_MODEL_ENABLED=true`; backend cần `AI__Enabled=true` cùng đúng ServiceUrl/hash/version. Chỉ bật Python chưa đủ. Khi AI không sẵn sàng, chọn mood thủ công vẫn hoạt động.
+
+## Cách sử dụng
+
+**User:** Trang chủ chọn emoji → gợi ý → chi tiết nghe/xem/mở dịch vụ gốc → đánh giá. Khám phá dùng mô tả hoặc chọn mood; Thư viện nằm ở tab giữa; Lịch sử xem lại hoạt động.
+
+**Admin:** quản lý catalog/VA; Users → Activity tra cứu tương tác/gợi ý/đánh giá; Feedback xem tên/ảnh nội dung và nhận xét; Models giám sát model.
+
+**AIEngineer:** model/mapping/dataset/job/báo cáo/phân tích phản hồi; không CRUD tài khoản hay catalog. Recommendations trên dashboard ghi lịch sử tài khoản đang đăng nhập, không phải sandbox.
+
+Spotify/YouTube quyết định quyền nhúng và thời lượng phát; không đảm bảo nghe toàn bài trong embed. Mở player/link không chứng minh đã xem/nghe xong.
+
+## Backup và kiểm thử
+
+```powershell
+node scripts/mongo-backup.mjs export --out .local-backups/my-backup
+node scripts/check-backup-roundtrip.mjs .local-backups/my-backup
+```
+
+Roundtrip restore vào DB tạm rồi xóa DB tạm; kiểm tra BSON/schema/index và bảo vệ DB có dữ liệu. Export tuần tự không phải snapshot giao dịch toàn DB; nên ngừng thao tác ghi trong lúc backup.
+
+```powershell
+dotnet build tests/Moodify.Integration.csproj
+dotnet run --project tests/Moodify.Integration.csproj --no-build
+npm run lint --prefix admin-web
+npm run build --prefix admin-web
+cd mobile-app
+flutter analyze
+flutter test
+```
+
+MongoDB phải chạy; các test AI cần artifact/config riêng. Backend tests mặc định dùng DB tạm. Smoke/fixture tests không chứng minh độ chính xác AI.
+
+## Lỗi thường gặp và giới hạn
+
+- Cổng 5170/5174 bị chiếm: kiểm tra Status và Stop runner trước khi dotnet run.
+- Runtime unavailable: kiểm tra Python, weights/hash, AI.Enabled, ServiceUrl; registry active không đồng nghĩa runtime đang chạy.
+- Unknown/unmapped: nhãn chưa vượt ngưỡng hoặc chưa có mood; chọn tay.
+- Danh mục trống: import bản backup riêng hoặc thêm nội dung bằng Admin.
+- Emulator không kết nối: kiểm tra backend và API 10.0.2.2:5170.
+
+Chưa hoàn tất đánh giá NLP/recommender độc lập, đo thời lượng nghe/xem thực, RL và chứng minh rollback sang artifact thứ hai. Kiểm tra quyền phân phối trước khi công bố dataset/artifact bên thứ ba; repo không tự cấp giấy phép cho chúng.
+
+## Tài liệu
+
+- [Báo cáo tuần 7–8](docs/BAO_CAO_TUAN_7_8.md).
+- [Đối chiếu task và phân quyền](docs/WEEK_7_8_ROLE_REVIEW.md).
+- [Emotion mapping](docs/EMOTION_MAPPING_RESEARCH.md).
+- [AI Engineer](docs/AI_ENGINEER_IMPLEMENTATION.md).
+- [Recommender](docs/RECOMMENDATION_FEATURES_2026-10-07.md).
+- [File giữ lại và chuyển riêng](docs/REPOSITORY_CLEANUP.md).
+
+README là điểm bắt đầu hiện tại; tài liệu theo ngày có thể phản ánh trạng thái cũ.

@@ -21,7 +21,12 @@ public class HistoryController(MongoStore db, ExternalCatalog external) : Contro
         var pageItems = await query.OrderByDescending(x=>x.ThoiGian).ThenByDescending(x=>x.LichSuID).Skip((page-1)*50).Take(50).ToListAsync();
         var moodIds=pageItems.Select(x=>x.TamTrangID).Distinct().ToArray();
         var names=(await db.TamTrangs.Where(x=>moodIds.Contains(x.TamTrangID)).ToListAsync()).ToDictionary(x=>x.TamTrangID,x=>x.TenTamTrang);
-        return Ok(new { total=await query.CountAsync(),page,pageSize=50,items=pageItems.Select(x=>new {x.LichSuID,x.TamTrangID,tenTamTrang=names.GetValueOrDefault(x.TamTrangID),x.ThoiGian,x.Valence,x.Arousal,x.VanBanDauVao}) });
+        return Ok(new { total=await query.CountAsync(),page,pageSize=50,items=pageItems.Select(x=>new {
+            x.LichSuID,x.RecommendationId,x.TamTrangID,tenTamTrang=names.GetValueOrDefault(x.TamTrangID),
+            x.ThoiGian,x.Valence,x.Arousal,x.VanBanDauVao,x.RecommendedItems,x.Algorithm,x.Source,
+            x.AnalysisId,x.AnalyzerVersion,x.MappingVersion,x.AnalysisSource,x.DecisionSource,
+            x.MoodConfigHash,x.AnalysisExpiresAt
+        }) });
     }
     [HttpGet("ratings")]
     public async Task<IActionResult> Ratings([FromQuery] int page = 1)
@@ -37,7 +42,9 @@ public class HistoryController(MongoStore db, ExternalCatalog external) : Contro
     public async Task<IActionResult> Rate(RatingDto dto)
     {
         if (!await db.NoiDungGiaiTris.AnyAsync(x => x.NoiDungID == dto.NoiDungID) && !await external.Contains(dto.NoiDungID)) return NotFound();
-        var rating = new DanhGia { TaiKhoanID = UserId, NoiDungID = dto.NoiDungID,
+        if (!await ActivityQuery.ValidRecommendation(db, UserId, dto.RecommendationId, dto.NoiDungID))
+            return BadRequest(new { message = "Invalid recommendation reference." });
+        var rating = new DanhGia { TaiKhoanID = UserId, NoiDungID = dto.NoiDungID, RecommendationId = dto.RecommendationId,
             SoSao = dto.SoSao, NhanXet = dto.NhanXet?.Trim(), ThoiGian = DateTime.UtcNow };
         await db.Insert(rating);
         

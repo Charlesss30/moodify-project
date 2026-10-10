@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import 'core/colors.dart';
 import 'core/api_service.dart';
-import 'core/mock_database.dart';
+import 'models/session_user.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
-import 'screens/home_screen.dart';
+import 'screens/app_shell.dart';
 
 void main() {
   runApp(const MoodifyApp());
@@ -18,6 +20,9 @@ class MoodifyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Moodify',
+      locale: const Locale('vi', 'VN'),
+      supportedLocales: const [Locale('vi', 'VN'), Locale('en')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
@@ -40,7 +45,39 @@ class AppFlowCoordinator extends StatefulWidget {
 class _AppFlowCoordinatorState extends State<AppFlowCoordinator> {
   // Tiền điều kiện UC01, UC02: Người dùng mở ứng dụng và chưa đăng nhập (view = 'login')
   String _currentView = 'login';
-  UserAccount? _currentUserSession; // Quản lý phiên làm việc sau UC02
+  SessionUser? _currentUserSession;
+
+  @override
+  void initState() {
+    super.initState();
+    ApiService.onUnauthorized = _expireSession;
+  }
+
+  void _expireSession() {
+    if (!mounted) return;
+    Navigator.of(
+      context,
+      rootNavigator: true,
+    ).popUntil((route) => route.isFirst);
+    setState(() {
+      ApiService.expireSession();
+      _currentUserSession = null;
+      _currentView = 'login';
+    });
+  }
+
+  void _logout() {
+    ApiService.logout();
+    if (!mounted) return;
+    Navigator.of(
+      context,
+      rootNavigator: true,
+    ).popUntil((route) => route.isFirst);
+    setState(() {
+      _currentUserSession = null;
+      _currentView = 'login';
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,15 +96,11 @@ class _AppFlowCoordinatorState extends State<AppFlowCoordinator> {
 
       case 'home':
         // Hậu điều kiện UC02: Có mã phiên làm việc, mở khóa chức năng
-        return HomeScreen(
+        return AppShell(
           currentUser: _currentUserSession!,
           // UC03 - Dòng 4 & 5: Kết thúc phiên làm việc, quay về trạng thái vãng lai (login)
           onLogoutConfirmed: () {
-            ApiService.logout();
-            setState(() {
-              _currentUserSession = null;
-              _currentView = 'login';
-            });
+            _logout();
           },
         );
 
@@ -88,5 +121,11 @@ class _AppFlowCoordinatorState extends State<AppFlowCoordinator> {
           },
         );
     }
+  }
+
+  @override
+  void dispose() {
+    ApiService.onUnauthorized = null;
+    super.dispose();
   }
 }

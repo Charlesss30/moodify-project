@@ -18,6 +18,9 @@ namespace MoodRecommendationAPI.Controllers
         private readonly TokenService _tokens;
         private readonly AdminLoginHandoff _handoff;
 
+        private static bool CanAccessWorkspace(string role) =>
+            AdminRoles.IsAdmin(role) || role == "AIEngineer";
+
         public AuthController(MongoStore context, TokenService tokens, AdminLoginHandoff handoff)
         {
             _context = context;
@@ -51,8 +54,8 @@ namespace MoodRecommendationAPI.Controllers
             var id = _handoff.Consume(code);
             if (id == null) return Unauthorized(new { message = "Your sign-in handoff has expired. Please sign in again." });
             var user = await _context.TaiKhoans.FirstOrDefaultAsync(x => x.TaiKhoanID == id);
-            if (user == null || !user.TrangThai || !AdminRoles.IsAdmin(user.VaiTro))
-                return StatusCode(403, new { message = "This account no longer has administrator access." });
+            if (user == null || !user.TrangThai || !CanAccessWorkspace(user.VaiTro))
+                return StatusCode(403, new { message = "This account no longer has workspace access." });
             var expiresAt = DateTime.UtcNow.AddHours(1);
             return Ok(new { token = _tokens.Create(user, expiresAt), expiresAt });
         }
@@ -144,7 +147,7 @@ namespace MoodRecommendationAPI.Controllers
                 });
             }
 
-            if (AdminRoles.IsAdmin(user.VaiTro))
+            if (CanAccessWorkspace(user.VaiTro))
                 Response.Cookies.Append(AdminLoginHandoff.CookieName, _handoff.Issue(user.TaiKhoanID), HandoffCookie());
             var expiresAt = DateTime.UtcNow.AddHours(1);
             return Ok(new

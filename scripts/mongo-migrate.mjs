@@ -36,24 +36,8 @@ try {
   if(Object.keys(changes).length)await db.collection('Nhac').updateOne({_id:row._id},{$set:changes});
  }
  await db.collection('Phim').updateMany({MoodSource:{$exists:false}},{$set:{MoodSource:'legacy-unverified'}});
- // Only fill missing OMDb metadata when the exact normalized title matches. Keep reviewed coordinates.
- const configPath=path.join(root,'backend/appsettings.Development.json');
- const config=fs.existsSync(configPath)?JSON.parse(fs.readFileSync(configPath,'utf8').replace(/^\uFEFF/,'')):{};
- const key=config.Omdb?.ApiKey, enriched=[];
- const titleKey=s=>s.normalize('NFKD').replace(/[^\p{L}\p{N}]/gu,'').toLowerCase();
- if(key)for(const movie of await db.collection('Phim').find({IMDBID:null}).toArray()){
-  const content=await db.collection('NoiDungGiaiTri').findOne({_id:movie._id});if(!content)continue;
-  try{
-   const response=await fetch('https://www.omdbapi.com/?'+new URLSearchParams({apikey:key,t:content.TieuDe,type:'movie',plot:'full'}),{signal:AbortSignal.timeout(15000)});
-   const result=await response.json();
-   if(result.Response!=='True'||result.Type!=='movie'||titleKey(result.Title)!==titleKey(content.TieuDe))continue;
-   const changes={};if(!content.HinhAnh&&result.Poster?.startsWith('https://'))changes.HinhAnh=result.Poster;
-   if(!content.MoTa&&result.Plot&&result.Plot!=='N/A')changes.MoTa=result.Plot;
-   if(Object.keys(changes).length)await db.collection('NoiDungGiaiTri').updateOne({_id:movie._id},{$set:changes});
-   await db.collection('Phim').updateOne({_id:movie._id},{$set:{IMDBID:result.imdbID,MetadataSource:'OMDb'}});
-   enriched.push(movie._id);
-  }catch{console.log('Metadata lookup unavailable for',movie._id);}
- }
+ // Legacy structural migration only. Run migrate-movies-tmdb.mjs after converting to the English schema.
+ const enriched=[];
  const numeric={bsonType:['int','long','double','decimal']};
  const range=(min,max,nullable=false)=>({...numeric,bsonType:nullable?[...numeric.bsonType,'null']:numeric.bsonType,minimum:min,maximum:max});
  const str={bsonType:'string'}, optionalString={bsonType:['string','null']}, int={bsonType:['int','long'],minimum:1}, date={bsonType:'date'};

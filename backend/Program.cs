@@ -47,9 +47,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 });
 builder.Services.AddAuthorization();
 builder.Services.AddMemoryCache();
-builder.Services.AddHttpClient("Omdb", client => client.Timeout = TimeSpan.FromSeconds(15));
-// OMDb authenticates in the query string: suppress HTTP URL logging to keep the key private.
-builder.Logging.AddFilter("System.Net.Http.HttpClient.Omdb", LogLevel.None);
+builder.Services.AddHttpClient("EmotionInference", client =>
+{
+    var serviceUrl = builder.Configuration["AI:ServiceUrl"] ?? "http://127.0.0.1:8001/";
+    client.BaseAddress = new Uri(serviceUrl, UriKind.Absolute);
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddSingleton<MoodAnalysisService>();
+builder.Services.AddSingleton<AiModelRegistryService>();
 builder.Services.AddHttpClient("Spotify", client => client.Timeout = TimeSpan.FromSeconds(20))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All });
 builder.Logging.AddFilter("System.Net.Http.HttpClient.Spotify", LogLevel.Warning);
@@ -77,6 +82,7 @@ builder.Services.AddSingleton<ExternalCatalog>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddHttpClient("Tmdb", client => client.Timeout = TimeSpan.FromSeconds(10));
 var app = builder.Build();
 await app.Services.GetRequiredService<MongoStore>().Initialize(Path.Combine(app.Environment.ContentRootPath,"Data/mongo-schema.json"));
 app.Use(async (context,next) => {

@@ -1,110 +1,320 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/mobile_models.dart';
+import '../models/session_user.dart';
+import '../services/mood_analysis/mood_analyzer.dart';
+
+class ApiException implements Exception {
+  const ApiException(this.message, {this.statusCode});
+
+  final String message;
+  final int? statusCode;
+
+  @override
+  String toString() => message;
+}
+
 class ApiService {
   static String? _token;
-  static void logout() { _token = null; }
+  static int _sessionVersion = 0;
+  static final historyRevision = ValueNotifier<int>(0);
+  @visibleForTesting
+  static http.Client Function() clientFactory = http.Client.new;
+  @visibleForTesting
+  static Duration requestTimeout = const Duration(seconds: 20);
+  static bool _sessionExpired = false;
+  static VoidCallback? onUnauthorized;
 
-  static Future<dynamic> request(String path, {String method = 'GET', Map<String, dynamic>? body}) async {
-    final req = http.Request(method, Uri.parse('$baseUrl/api$path'));
-    req.headers['Content-Type'] = 'application/json';
-    if (_token != null) req.headers['Authorization'] = 'Bearer $_token';
-    if (body != null) req.body = jsonEncode(body);
-    final response = await http.Response.fromStream(await req.send().timeout(const Duration(seconds: 20)));
-    if (response.statusCode == 401) _token = null;
-    final data = response.body.isEmpty ? null : jsonDecode(response.body);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(data is Map ? data['message'] ?? 'Yêu cầu thất bại (${response.statusCode}).' : 'Yêu cầu thất bại.');
-    }
-    return data;
+  static void logout() {
+    _token = null;
+    _sessionVersion++;
+    _sessionExpired = false;
   }
-  static Future<dynamic> moods() => request('/MoodMapping');
-  static Future<dynamic> recommend(int moodId, String contentType) =>
-      request('/Recommendation', method: 'POST', body: {'tamTrangID': moodId, 'loaiNoiDung': contentType});
-  static Future<dynamic> history() => request('/History');
-  static Future<dynamic> rate(String contentId, int stars, String comment) =>
-      request('/History/ratings', method: 'POST', body: {'noiDungID': contentId, 'soSao': stars, 'nhanXet': comment});
+
+  static void expireSession() {
+    _token = null;
+    _sessionVersion++;
+    _sessionExpired = true;
+  }
 
   static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:5170';
-    } else if (defaultTargetPlatform == TargetPlatform.android) {
+    const configured = String.fromEnvironment('API_BASE_URL');
+    if (configured.trim().isNotEmpty) {
+      return configured.trim().replaceFirst(RegExp(r'/$'), '');
+    }
+    if (kIsWeb) return 'http://localhost:5170';
+    if (defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:5170';
-    } else {
-      return 'http://localhost:5170';
+    }
+    return 'http://localhost:5170';
+  }
+
+  static Future<dynamic> request(
+    String path, {
+    String method = 'GET',
+    Map<String, dynamic>? body,
+    bool authenticated = true,
+  }) async {
+    final request = http.Request(method, Uri.parse('$baseUrl/api$path'));
+    final sessionVersion = _sessionVersion;
+    final client = clientFactory();
+    final hadSession = authenticated && _token != null;
+    request.headers['Accept'] = 'application/json';
+    if (body != null) {
+      request.headers['Content-Type'] = 'application/json';
+      request.body = jsonEncode(body);
+    }
+    if (authenticated && _token != null) {
+      request.headers['Authorization'] = 'Bearer $_token';
+    }
+    try {
+      final response = await (() async => http.Response.fromStream(
+        await client.send(request),
+      ))().timeout(requestTimeout);
+      if (authenticated && sessionVersion != _sessionVersion) {
+        throw const ApiException('Phiên đăng nhập đã thay đổi.');
+      }
+      dynamic data;
+      try {
+        data = _decode(response.body);
+      } on FormatException {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          throw const ApiException('Máy chủ trả về dữ liệu không hợp lệ.');
+        }
+      }
+      if (response.statusCode == 401) {
+        if (hadSession) {
+          _token = null;
+          _sessionVersion++;
+          if (!_sessionExpired) {
+            _sessionExpired = true;
+            onUnauthorized?.call();
+          }
+          throw const ApiException(
+            'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+            statusCode: 401,
+          );
+        }
+        throw ApiException(
+          _message(data) ?? 'Thông tin đăng nhập chưa chính xác.',
+          statusCode: 401,
+        );
+      }
+      if (response.statusCode == 403) {
+        throw ApiException(
+          _message(data) ?? 'Tài khoản không có quyền thực hiện thao tác này.',
+          statusCode: 403,
+        );
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException(
+          _message(data) ?? 'Yêu cầu thất bại (HTTP ${response.statusCode}).',
+          statusCode: response.statusCode,
+        );
+      }
+      return data;
+    } on ApiException {
+      rethrow;
+    } on TimeoutException {
+      throw const ApiException('Máy chủ phản hồi quá lâu. Hãy thử lại.');
+    } on http.ClientException {
+      throw ApiException('Không thể kết nối máy chủ tại $baseUrl.');
+    } on FormatException {
+      throw const ApiException('Máy chủ trả về dữ liệu không hợp lệ.');
+    } finally {
+      client.close();
     }
   }
 
-  // Khớp 100% với LoginDto: identifier, matKhau
-  static Future<Map<String, dynamic>> login({
+  static dynamic _decode(String body) {
+    if (body.trim().isEmpty) return null;
+    return jsonDecode(body);
+  }
+
+  static String? _message(dynamic data) {
+    if (data is! Map) return null;
+    final message = data['message'] ?? data['title'];
+    if (message is String && message.trim().isNotEmpty) return message;
+    final errors = data['errors'];
+    if (errors is Map) {
+      for (final value in errors.values) {
+        if (value is List && value.isNotEmpty && value.first is String) {
+          return value.first as String;
+        }
+      }
+    }
+    return null;
+  }
+
+  static Map<String, dynamic> _object(dynamic value) =>
+      value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+
+  static Future<SessionUser> login({
     required String emailOrUsername,
     required String password,
   }) async {
-    final url = Uri.parse('$baseUrl/api/Auth/login');
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'identifier': emailOrUsername.trim(),
-          'matKhau': password,
-        }),
-      );
-
-      final data = response.body.isNotEmpty ? jsonDecode(response.body) : {};
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        _token = data['token'] as String?;
-        return {'success': true, 'data': data};
-      } else {
-        return {
-          'success': false,
-          'message': data['message'] ?? 'Tên đăng nhập hoặc mật khẩu chưa chính xác.',
-        };
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Không thể kết nối máy chủ ($baseUrl).',
-      };
+    final response = _object(
+      await request(
+        '/Auth/login',
+        method: 'POST',
+        authenticated: false,
+        body: {'identifier': emailOrUsername.trim(), 'matKhau': password},
+      ),
+    );
+    final token = response['token'];
+    if (token is! String || token.isEmpty) {
+      throw const ApiException('Máy chủ không trả về phiên đăng nhập hợp lệ.');
     }
+    _token = token;
+    _sessionVersion++;
+    _sessionExpired = false;
+    return SessionUser.fromJson(_object(response['user']));
   }
 
-  // Khớp 100% với RegisterDto: tenDangNhap, email, matKhau
-  static Future<Map<String, dynamic>> register({
+  static Future<void> register({
     required String fullName,
     required String email,
     required String password,
   }) async {
-    final url = Uri.parse('$baseUrl/api/Auth/register');
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'tenDangNhap': fullName.trim(),
-          'email': email.trim(),
-          'matKhau': password,
-        }),
+    await request(
+      '/Auth/register',
+      method: 'POST',
+      authenticated: false,
+      body: {
+        'tenDangNhap': fullName.trim(),
+        'email': email.trim(),
+        'matKhau': password,
+      },
+    );
+  }
+
+  static Future<SessionUser> me() async =>
+      SessionUser.fromJson(_object(await request('/Auth/me')));
+
+  static Future<List<Mood>> moods() async {
+    final response = await request('/MoodMapping');
+    if (response is! List) {
+      throw const ApiException('Danh sách tâm trạng không hợp lệ.');
+    }
+    return response
+        .map((item) => Mood.fromJson(_object(item)))
+        .toList(growable: false);
+  }
+
+  static Future<RecommendationResult> recommend(
+    int moodId,
+    String? contentType, {
+    String source = 'manual',
+    String mode = 'hybrid',
+    String? analysisId,
+    int limit = 12,
+    bool balanced = false,
+  }) async {
+    final result = RecommendationResult.fromJson(
+      _object(
+        await request(
+          '/Recommendation',
+          method: 'POST',
+          body: {
+            'tamTrangID': moodId,
+            'loaiNoiDung': contentType,
+            'limit': limit,
+            'balanced': balanced,
+            'source': source,
+            'mode': mode,
+            'analysisId': analysisId,
+          },
+        ),
+      ),
+    );
+    historyRevision.value++;
+    return result;
+  }
+
+  static Future<MoodAnalysisResult> analyzeMood(
+    String text, {
+    required String language,
+  }) async {
+    final response = _object(
+      await request(
+        '/MoodAnalysis',
+        method: 'POST',
+        body: {'text': text, 'language': language},
+      ),
+    );
+    return MoodAnalysisResult.fromApi(response);
+  }
+
+  static Future<List<ContentItem>> catalog(String type) async {
+    final response = await request(type == 'Music' ? '/Music' : '/Movies');
+    if (response is! List) {
+      throw const ApiException('Danh mục nội dung không hợp lệ.');
+    }
+    return response
+        .map((item) => ContentItem.fromJson(_object(item)))
+        .toList(growable: false);
+  }
+
+  static Future<ContentItem> content(
+    String type,
+    String id,
+  ) async => ContentItem.fromJson(
+    _object(
+      await request(
+        '/${type == 'Music' ? 'Music' : 'Movies'}/${Uri.encodeComponent(id)}',
+      ),
+    ),
+  );
+
+  static Future<Map<String, dynamic>> musicPreview(String id) async =>
+      _object(await request('/Music/${Uri.encodeComponent(id)}/preview'));
+
+  static Future<PagedResult<MoodHistoryEntry>> history(int page) async =>
+      PagedResult<MoodHistoryEntry>.fromJson(
+        _object(await request('/History?page=$page')),
+        MoodHistoryEntry.fromJson,
       );
 
-      final data = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+  static Future<void> interaction(
+    String contentId,
+    String action,
+    String eventId, {
+    String? recommendationId,
+  }) async {
+    await request(
+      '/Interactions',
+      method: 'POST',
+      body: {
+        'contentId': contentId,
+        'action': action,
+        'eventId': eventId,
+        'recommendationId': recommendationId,
+      },
+    );
+  }
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return {'success': true, 'data': data};
-      } else {
-        return {
-          'success': false,
-          'message': data['message'] ?? 'Đăng ký không thành công.',
-        };
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Lỗi kết nối máy chủ ($baseUrl).',
-      };
-    }
+  static Future<Map<String, dynamic>> interactions(int page) async =>
+      _object(await request('/Interactions?page=$page'));
+
+  static Future<void> rate(
+    String contentId,
+    int stars,
+    String comment, {
+    String? recommendationId,
+  }) async {
+    await request(
+      '/History/ratings',
+      method: 'POST',
+      body: {
+        'noiDungID': contentId,
+        'soSao': stars,
+        'recommendationId': recommendationId,
+        if (comment.trim().isNotEmpty) 'nhanXet': comment.trim(),
+      },
+    );
   }
 }

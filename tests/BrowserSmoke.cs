@@ -54,6 +54,7 @@ public static class BrowserSmoke
                 new TaiKhoan { TenDangNhap = "browser_user", Email = "browser_user@test.invalid", MatKhau = BCrypt.Net.BCrypt.HashPassword(password) });
 
             var apiPort = FreePort(); var adminPort = FreePort();
+            await db.Insert(new TaiKhoan { TenDangNhap = "browser_engineer", Email = "browser_engineer@test.invalid", VaiTro = "AIEngineer", MatKhau = BCrypt.Net.BCrypt.HashPassword(password) });
             var api = $"http://127.0.0.1:{apiPort}";
             var admin = $"http://127.0.0.1:{adminPort}";
             backend = Start("dotnet", Path.Combine(root, "backend"),
