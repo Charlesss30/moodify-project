@@ -56,6 +56,12 @@ try
     start.Environment["Mongo__ConnectionString"] = original;
     start.Environment["Mongo__Database"] = database;
     start.Environment["Jwt__Key"] = key;
+    var trainingFixture = Environment.GetEnvironmentVariable("MOODIFY_TRAINING_TEST_MODEL");
+    start.Environment["Training__Enabled"] = trainingFixture is null ? "false" : "true";
+    if (trainingFixture is not null) {
+        start.Environment["Training__BaseModelDirectory"] = trainingFixture;
+        start.Environment["Training__Device"] = "cpu";
+    }
     start.Environment["Spotify__ClientId"] = "";
     start.Environment["Tmdb__AccessToken"] = "";
     start.Environment["Spotify__ClientSecret"] = "";
@@ -469,6 +475,12 @@ try
     start.Environment["Mongo__ConnectionString"] = original;
     start.Environment["Mongo__Database"] = database;
     start.Environment["Jwt__Key"] = key;
+    trainingFixture = Environment.GetEnvironmentVariable("MOODIFY_TRAINING_TEST_MODEL");
+    start.Environment["Training__Enabled"] = trainingFixture is null ? "false" : "true";
+    if (trainingFixture is not null) {
+        start.Environment["Training__BaseModelDirectory"] = trainingFixture;
+        start.Environment["Training__Device"] = "cpu";
+    }
     start.Environment["Spotify__ClientId"] = "";
     start.Environment["Omdb__ApiKey"] = "";
     start.Environment["Spotify__ClientSecret"] = "";
@@ -555,6 +567,8 @@ try
     await Call("POST", "/Movies", new {noiDungID="bad-trailer",tieuDe="Bad",trailerUrl="https://evil.test/watch?v=12345678901"},400,at);
     await Call("POST", "/Movies", new {noiDungID="good-trailer",tieuDe="Trailer",valence=0,arousal=0,moodSource="manual",trailerUrl="https://www.youtube.com/watch?v=12345678901"},201,at);
     Check((await Call("GET","/Movies/good-trailer",null,200,ut))!["phim"]!["trailerUrl"]!.GetValue<string>().Contains("12345678901"),"Trailer URL not persisted.");
+    await StatisticsTests.Run(db, Call, Check, user.TaiKhoanID, ut, ot);
+    await PersonalLibraryTests.Run(db, Call, Check, user.TaiKhoanID, ut, ot);
     Console.WriteLine($"PASS: {checks} HTTP and business assertions on an isolated MongoDB database.");
 }
 finally

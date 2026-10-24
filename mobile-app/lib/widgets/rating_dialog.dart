@@ -61,6 +61,7 @@ class _RatingDialogState extends State<RatingDialog> {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),
+      scrollable: true,
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -81,6 +82,18 @@ class _RatingDialogState extends State<RatingDialog> {
                 ),
               ),
             ),
+            const SizedBox(height: 4),
+            Text(
+              const [
+                'Rất chưa hài lòng',
+                'Chưa hài lòng',
+                'Bình thường',
+                'Hài lòng',
+                'Rất hài lòng',
+              ][_stars - 1],
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 16),
             TextField(
               controller: _comment,
               hintLocales: const [Locale('vi', 'VN'), Locale('en')],

@@ -177,6 +177,8 @@ try {
   await page.locator('#job-create [name=modelVersion]').fill('browser_asl_02')
   await page.locator('#job-create [type=submit]').click()
   await page.locator('[data-notebook]').waitFor()
+  await page.locator('[data-local-start]').waitFor()
+  await page.getByRole('heading', {name:'Local training worker',exact:true}).waitFor()
   const [download]=await Promise.all([page.waitForEvent('download'),page.locator('[data-notebook]').click()])
   const notebook=JSON.parse(fs.readFileSync(await download.path(),'utf8'))
   assert.equal(notebook.cells.length,13)

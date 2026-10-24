@@ -205,6 +205,7 @@ class MoodHistoryEntry {
     this.recommendedItems,
     this.algorithm,
     this.source,
+    this.recommendationId,
   });
 
   final int id;
@@ -216,6 +217,7 @@ class MoodHistoryEntry {
   final List<ContentItem>? recommendedItems;
   final String? algorithm;
   final String? source;
+  final String? recommendationId;
 
   factory MoodHistoryEntry.fromJson(Map<String, dynamic> json) =>
       MoodHistoryEntry(
@@ -238,6 +240,7 @@ class MoodHistoryEntry {
             : null,
         algorithm: _optionalString(json['algorithm']),
         source: _optionalString(json['source']),
+        recommendationId: _optionalString(json['recommendationId']),
       );
 }
 

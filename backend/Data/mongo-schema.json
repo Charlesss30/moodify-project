@@ -912,5 +912,49 @@
         }
       }
     }
+  },
+  "savedContents": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "accountId",
+        "contentId",
+        "title",
+        "contentType",
+        "createdAt"
+      ],
+      "properties": {
+        "_id": {
+          "bsonType": "string"
+        },
+        "accountId": {
+          "bsonType": "int"
+        },
+        "contentId": {
+          "bsonType": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "title": {
+          "bsonType": "string"
+        },
+        "imageUrl": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "contentType": {
+          "enum": [
+            "Movie",
+            "Song"
+          ]
+        },
+        "createdAt": {
+          "bsonType": "date"
+        }
+      }
+    }
   }
 }

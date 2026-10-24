@@ -1,15 +1,15 @@
-﻿# Moodify — Gợi ý phim và âm nhạc theo tâm trạng
+# Moodify — Gợi ý phim và âm nhạc theo tâm trạng
 
 Hệ thống gồm Flutter, website Admin/AIEngineer, ASP.NET Core API và Python inference RoBERTa. Dữ liệu nghiệp vụ dùng **MongoDB**, phim tích hợp **TMDB**, nhạc tích hợp **Spotify**. Repo không chứa database cá nhân, file phim/nhạc hay trọng số model.
 
 ## Chức năng
 
-- User: đăng ký/đăng nhập; quiz emoji; khám phá mô tả tiếng Anh hoặc chọn mood; thư viện; chi tiết phim/nhạc, trailer YouTube, Spotify player và liên kết gốc; lịch sử tương tác; đánh giá 1–5 sao, nhận xét trong chi tiết.
+- User: đăng ký/đăng nhập; quiz emoji; khám phá mô tả tiếng Anh hoặc chọn mood; thư viện; chi tiết phim/nhạc, trailer YouTube, Spotify player và liên kết gốc; lịch sử tương tác; đánh giá 1–5 sao, nhận xét trong chi tiết; xem đánh giá của tôi, tổng quan 7 ngày và lưu phim/nhạc để xem/nghe sau.
 - Admin: nội dung, thể loại, người dùng, mood/vùng VA; Feedback; Users → Activity; Recommendations và quản lý vòng đời model.
 - AIEngineer: AI overview, Models, Emotion mapping, Evaluation, Datasets, Training jobs, Feedback analytics, Inference lab, Recommendations.
 - Recommender: Mood Matching + Content-based + Collaborative Filtering; phản hồi mới cập nhật hồ sơ và thứ hạng ở yêu cầu tiếp theo.
 
-AI hiện hỗ trợ **tiếng Anh**, cần người dùng xác nhận mood và có fallback thủ công. Mapping còn thử nghiệm. Training jobs chuẩn bị notebook Colab/nhận báo cáo, **không tự train GPU trên web**. Feedback Loop không phải Reinforcement Learning.
+AI hiện hỗ trợ **tiếng Anh**, cần người dùng xác nhận mood và có fallback thủ công. Mapping còn thử nghiệm. Training jobs hỗ trợ chạy worker local từ dashboard (CPU mặc định) hoặc xuất notebook Colab/nhập báo cáo. Model đang serving không bị thay khi train. Feedback Loop không phải Reinforcement Learning.
 
 ## Cấu trúc repository
 
@@ -131,13 +131,13 @@ Khôi phục artifact được cấp riêng tại `code-train/train-KLCN/output/
 1. Cài `ai-service/.venv`, đặt artifact đúng hash/version, chạy `./Start.ps1` không có WithoutAI.
 2. Đợi inference ready cổng 8001. Đăng nhập Admin/AIEngineer → Models → Validate → Activate. Runtime ready và registry active là hai điều kiện riêng; runner không tự Activate.
 3. AIEngineer → Emotion mapping để duyệt nhãn; có thể giữ Unmapped khi chưa có mood tương ứng. Inference lab thử câu tiếng Anh, Evaluation xem báo cáo.
-4. Datasets → Training jobs: tải bundle/notebook, chạy Colab bên ngoài rồi nhập báo cáo. Tạo job không tự triển khai model mới.
+4. Datasets → Training jobs: tạo job rồi chọn **Start local training** để chạy worker, hoặc tải notebook chạy Colab. Xem Progress / logs; Stop training process dừng job local. Hoàn tất tạo candidate riêng, không tự Activate model mới.
 
 Nếu chạy từng terminal, Python cần `AI_MODEL_ENABLED=true`; backend cần `AI__Enabled=true` cùng đúng ServiceUrl/hash/version. Chỉ bật Python chưa đủ. Khi AI không sẵn sàng, chọn mood thủ công vẫn hoạt động.
 
 ## Cách sử dụng
 
-**User:** Trang chủ chọn emoji → gợi ý → chi tiết nghe/xem/mở dịch vụ gốc → đánh giá. Khám phá dùng mô tả hoặc chọn mood; Thư viện nằm ở tab giữa; Lịch sử xem lại hoạt động.
+**User:** Cá nhân có tổng quan 7 ngày (ngày ghi nhận mood, nội dung khác nhau đã mở chi tiết, lượt đánh giá). Cá nhân → Đánh giá của tôi xem ảnh/tên nội dung, sao, nhận xét và mở lại chi tiết. Cá nhân → Nội dung đã lưu đưa tới Thư viện → Đã lưu; thêm/bỏ lưu tại trang chi tiết, lọc phim/nhạc và kéo hoặc bấm tải lại. Danh sách được lưu theo tài khoản trong MongoDB. Cá nhân → Thống kê tâm trạng xem biểu đồ có thể chọn ngày, thể loại/khung giờ và số liệu kỳ trước. Cá nhân → Thông tin tài khoản cập nhật tên/ảnh/email; đổi email cần xác nhận mật khẩu. Trang chủ chọn emoji → gợi ý → chi tiết nghe/xem/mở dịch vụ gốc → đánh giá. Khám phá dùng mô tả hoặc chọn mood; Thư viện nằm ở tab giữa; Lịch sử có hai mục Tâm trạng và Hoạt động.
 
 **Admin:** quản lý catalog/VA; Users → Activity tra cứu tương tác/gợi ý/đánh giá; Feedback xem tên/ảnh nội dung và nhận xét; Models giám sát model.
 
@@ -177,6 +177,9 @@ MongoDB phải chạy; các test AI cần artifact/config riêng. Backend tests 
 Chưa hoàn tất đánh giá NLP/recommender độc lập, đo thời lượng nghe/xem thực, RL và chứng minh rollback sang artifact thứ hai. Kiểm tra quyền phân phối trước khi công bố dataset/artifact bên thứ ba; repo không tự cấp giấy phép cho chúng.
 
 ## Tài liệu
+
+- [Thống kê cá nhân và training local](docs/PERSONAL_STATS_LOCAL_TRAINING.md).
+- [Cập nhật giao diện mobile và cách kiểm tra](docs/MOBILE_UI_REFRESH.md).
 
 - [Báo cáo tuần 7–8](docs/BAO_CAO_TUAN_7_8.md).
 - [Đối chiếu task và phân quyền](docs/WEEK_7_8_ROLE_REVIEW.md).

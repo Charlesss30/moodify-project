@@ -77,6 +77,8 @@ builder.Services.AddCors(options =>
 builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(builder.Configuration["Mongo:ConnectionString"] ?? "mongodb://127.0.0.1:27017"));
 builder.Services.AddSingleton<MongoStore>();
 builder.Services.AddSingleton<ExternalCatalog>();
+builder.Services.AddSingleton<LocalTrainingWorker>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<LocalTrainingWorker>());
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();

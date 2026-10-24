@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_service.dart';
+import '../core/colors.dart';
+import '../core/presentation.dart';
+import '../widgets/app_widgets.dart';
 import '../models/mobile_models.dart';
 import '../models/session_user.dart';
 import 'content_detail_screen.dart';
@@ -14,6 +17,21 @@ class WelcomeTab extends StatefulWidget {
 }
 
 class _WelcomeTabState extends State<WelcomeTab> {
+  static const _dailyQuotes = <String>[
+    'Bạn không cần phải ổn ngay lập tức. Cứ đi từng bước nhỏ thôi.',
+    'Một ngày bình thường vẫn có thể bắt đầu cho điều tốt đẹp.',
+    'Nghỉ ngơi cũng là một cách để tiếp tục tiến về phía trước.',
+    'Bạn đã đi qua nhiều ngày khó khăn hơn bạn nghĩ.',
+    'Hôm nay, hãy dành cho mình một chút dịu dàng.',
+    'Không cần hoàn hảo; chỉ cần thành thật với cảm xúc của mình.',
+    'Một giai điệu hay đôi khi đủ để mở ra một khởi đầu mới.',
+    'Cảm xúc nào rồi cũng đổi thay. Hãy cho mình thời gian.',
+    'Đi chậm một chút vẫn là đang đi.',
+    'Bạn xứng đáng có những phút giây bình yên cho riêng mình.',
+    'Một câu chuyện hay có thể khiến hôm nay nhẹ nhàng hơn.',
+    'Hãy chọn điều khiến lòng bạn thấy dễ chịu hơn hôm qua.',
+  ];
+
   Mood? _mood;
   RecommendationResult? _result;
   bool _busy = false, _quizOpen = false;
@@ -52,7 +70,7 @@ class _WelcomeTabState extends State<WelcomeTab> {
       final result = await ApiService.recommend(
         _mood!.id,
         null,
-        limit: 6,
+        limit: 8,
         balanced: true,
       );
       if (mounted) setState(() => _result = result);
@@ -63,140 +81,240 @@ class _WelcomeTabState extends State<WelcomeTab> {
     }
   }
 
+  String get _dailyQuote {
+    final now = DateTime.now();
+    final today = DateTime.utc(now.year, now.month, now.day);
+    final dayNumber = today.difference(DateTime.utc(2020, 1, 1)).inDays;
+    return _dailyQuotes[dayNumber % _dailyQuotes.length];
+  }
+
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(22),
+    key: const PageStorageKey('home-scroll'),
+    padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
     children: [
-      Text(
-        'Xin chào, ${widget.user.fullName.isEmpty ? widget.user.email : widget.user.fullName}',
-        style: Theme.of(context).textTheme.titleLarge,
+      EntryFade(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppColors.accentPrimary.withValues(alpha: .15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.graphic_eq_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'MOODIFY',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            Text(
+              'Xin chào, ${widget.user.fullName.isEmpty ? widget.user.email : widget.user.fullName}',
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Một chút giải trí,\nđúng với cảm xúc bạn.',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 20),
+      Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF292038), Color(0xFF1B1B29)],
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.format_quote_rounded,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Một lời nhắn dành cho hôm nay',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(_dailyQuote, style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
       ),
       const SizedBox(height: 24),
-      Text(
+      SectionHeading(
         _mood == null
             ? 'Hôm nay bạn thế nào?'
-            : 'Dành cho tâm trạng ${_mood!.name}',
-        style: Theme.of(context).textTheme.headlineSmall,
+            : 'Dành cho tâm trạng ${moodName(_mood!.name).toLowerCase()}',
+        subtitle: _mood == null
+            ? 'Chọn cảm xúc để tìm nhạc và phim dành cho bạn.'
+            : 'Một vài lựa chọn để bạn bắt đầu.',
       ),
-      const SizedBox(height: 10),
       Align(
         alignment: Alignment.centerLeft,
         child: FilledButton.tonalIcon(
           onPressed: _busy ? null : _quiz,
-          icon: const Icon(Icons.mood),
+          icon: _mood == null
+              ? const Icon(Icons.mood)
+              : Text(
+                  moodEmoji(_mood!.name),
+                  style: const TextStyle(fontSize: 20),
+                ),
           label: Text(_mood == null ? 'Chọn cảm xúc của bạn' : 'Đổi tâm trạng'),
         ),
       ),
-      if (_busy)
-        const Padding(
-          padding: EdgeInsets.all(24),
-          child: Center(child: CircularProgressIndicator()),
+      const SizedBox(height: 16),
+      if (_busy) const LoadingCards(count: 2),
+      if (_error != null)
+        StatusCard(
+          title: 'Chưa tải được gợi ý',
+          message: _error!,
+          onRetry: _recommend,
+          actionLabel: 'Thử lại gợi ý',
+          icon: Icons.wifi_off_rounded,
         ),
-      if (_error != null) ...[
-        Text(_error!),
-        TextButton(onPressed: _recommend, child: const Text('Thử lại gợi ý')),
-      ],
       if (_result != null) ...[
         _shelf('Nhạc cho bạn', true),
         _shelf('Phim cho bạn', false),
       ],
       const SizedBox(height: 20),
-      const Text('Chưa diễn tả hết cảm xúc của bạn?'),
-      const SizedBox(height: 8),
-      OutlinedButton.icon(
-        onPressed: widget.onDiscover,
-        icon: const Icon(Icons.explore_outlined),
-        label: const Text('Khám phá chi tiết tâm trạng'),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.explore_outlined,
+                color: AppColors.accentPrimary,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Muốn hiểu rõ cảm xúc hơn?',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Viết vài dòng về ngày của bạn để khám phá những gợi ý khác.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: widget.onDiscover,
+                icon: const Icon(Icons.arrow_forward_rounded),
+                label: const Text('Khám phá chi tiết tâm trạng'),
+              ),
+            ],
+          ),
+        ),
       ),
     ],
   );
+
   Widget _shelf(String title, bool music) {
     final items = _result!.items
         .where((x) => x.content.isMusic == music)
-        .take(3)
+        .take(2)
         .toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 22),
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        if (items.isEmpty)
-          const Text('Chưa có nội dung phù hợp.')
-        else
-          SizedBox(
-            height: 245,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final item = items[index].content;
-                return SizedBox(
-                  width: 148,
-                  child: Card(
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => ContentDetailScreen(
-                            contentId: item.id,
-                            type: item.type,
-                            recommendationId: item.recommendationId,
-                          ),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            height: 145,
-                            width: double.infinity,
-                            child: item.imageUrl == null
-                                ? Icon(music ? Icons.music_note : Icons.movie)
-                                : Image.network(
-                                    item.imageUrl!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, _, _) => Icon(
-                                      music ? Icons.music_note : Icons.movie,
-                                    ),
-                                  ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                if ((music && item.artist != null) ||
-                                    (!music && item.director != null))
-                                  Text(
-                                    music
-                                        ? item.artist!
-                                        : 'ĐD: ${item.director}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                              ],
+    final width = ((MediaQuery.sizeOf(context).width - 52) / 2).clamp(
+      132.0,
+      176.0,
+    );
+    final imageHeight = music ? width : width * 1.5;
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeading(title),
+          if (items.isEmpty)
+            const StatusCard(message: 'Chưa có nội dung phù hợp.')
+          else
+            SizedBox(
+              height:
+                  imageHeight + MediaQuery.textScalerOf(context).scale(68) + 12,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final item = items[index].content;
+                  return SizedBox(
+                    width: width,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => ContentDetailScreen(
+                              contentId: item.id,
+                              type: item.type,
+                              recommendationId: item.recommendationId,
                             ),
                           ),
-                        ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ContentArtwork(
+                              url: item.imageUrl,
+                              music: music,
+                              width: width,
+                              height: imageHeight,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              item.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            if ((music ? item.artist : item.director) != null)
+                              Text(
+                                music ? item.artist! : 'ĐD: ${item.director}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -209,22 +327,11 @@ class _MoodQuiz extends StatefulWidget {
 
 class _MoodQuizState extends State<_MoodQuiz> {
   late Future<List<Mood>> _moods = ApiService.moods();
-  String _emoji(Mood m) {
-    final n = m.name.toLowerCase();
-    if (n.contains('angry')) return '😠';
-    if (n.contains('sad')) return '😢';
-    if (n.contains('stress') || n.contains('anxious')) return '😟';
-    if (n.contains('relax') || n.contains('calm')) return '😌';
-    if (n.contains('happy')) return '😊';
-    if (n.contains('excit')) return '🤩';
-    if (m.valence < -.2) return m.arousal > .2 ? '😟' : '😔';
-    if (m.valence > .2) return m.arousal > .2 ? '🤩' : '😌';
-    return '😐';
-  }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: const Text('Hôm nay bạn thế nào?'),
+    scrollable: true,
     content: SizedBox(
       width: 360,
       child: FutureBuilder<List<Mood>>(
@@ -257,7 +364,7 @@ class _MoodQuizState extends State<_MoodQuiz> {
               children: moods
                   .map(
                     (m) => ActionChip(
-                      label: Text('${_emoji(m)}  ${m.name}'),
+                      label: Text('${moodEmoji(m.name)}  ${moodName(m.name)}'),
                       onPressed: () => Navigator.pop(context, m),
                     ),
                   )
