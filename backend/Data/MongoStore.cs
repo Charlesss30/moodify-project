@@ -64,13 +64,6 @@ public sealed class MongoStore
         foreach (var name in new[] { "interactions", "ratings" })
             await Database.GetCollection<BsonDocument>(name).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument { ["accountId"] = 1, ["createdAt"] = -1, ["_id"] = -1 }));
         await Collection<LichSuTamTrang>().Indexes.CreateOneAsync(new CreateIndexModel<LichSuTamTrang>(new BsonDocument { ["accountId"] = 1, ["recommendationId"] = 1 }));
-        var saved = Database.GetCollection<SavedContent>("savedContents");
-        await saved.Indexes.CreateOneAsync(new CreateIndexModel<SavedContent>(
-            Builders<SavedContent>.IndexKeys.Ascending(x => x.AccountId).Ascending(x => x.ContentId),
-            new CreateIndexOptions { Unique = true }));
-        await saved.Indexes.CreateOneAsync(new CreateIndexModel<SavedContent>(
-            Builders<SavedContent>.IndexKeys.Ascending(x => x.AccountId).Ascending(x => x.ContentType)
-                .Descending(x => x.CreatedAt).Descending(x => x.Id)));
         // Finish interrupted deletes / remove incomplete inserts after a process restart.
         foreach(var item in await Collection<NoiDungGiaiTri>().Find(x=>x.Deleted).ToListAsync()) await DeleteContent(item.NoiDungID);
     }

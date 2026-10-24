@@ -6,9 +6,11 @@ export class ApiError extends Error {
 }
 export async function request(path, options = {}) {
   const token = sessionStorage.getItem(tokenKey)
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+  const headers = { ...(isFormData ? {} : { 'Content-Type': 'application/json' }), ...(token ? { Authorization: 'Bearer ' + token } : {}), ...options.headers }
   const response = await fetch(API_BASE_URL + path, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...options.headers },
+    headers,
   })
   if (!response.ok) {
     let message = 'API request failed (' + response.status + ').'

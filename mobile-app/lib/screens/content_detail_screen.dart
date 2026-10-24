@@ -13,9 +13,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api_service.dart';
 import '../core/colors.dart';
-import '../core/navigation.dart';
-import '../core/presentation.dart';
-import '../widgets/app_widgets.dart';
 import '../models/mobile_models.dart';
 
 class ContentDetailScreen extends StatefulWidget {
@@ -34,52 +31,12 @@ class ContentDetailScreen extends StatefulWidget {
   State<ContentDetailScreen> createState() => _ContentDetailScreenState();
 }
 
-class _ContentDetailScreenState extends State<ContentDetailScreen>
-    with RouteAware {
-  ModalRoute<dynamic>? _observedRoute;
-  bool _covered = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final route = ModalRoute.of(context);
-    if (route != _observedRoute) {
-      appRouteObserver.unsubscribe(this);
-      _observedRoute = route;
-      if (route != null) appRouteObserver.subscribe(this, route);
-    }
-  }
-
-  @override
-  void didPushNext() {
-    if (mounted) setState(() => _covered = true);
-  }
-
-  @override
-  void didPopNext() {
-    if (mounted) {
-      setState(() => _covered = false);
-      if (_seenSavedRevision != ApiService.savedRevision.value) {
-        unawaited(_loadSaved());
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    appRouteObserver.unsubscribe(this);
-    super.dispose();
-  }
-
+class _ContentDetailScreenState extends State<ContentDetailScreen> {
   ContentItem? _content;
   String? _error;
   bool _loading = true;
   bool _ratingOpen = false;
   bool _openingTrailer = false;
-  bool? _saved;
-  bool _saving = false, _checkingSaved = false;
-  String? _savedError;
-  int _seenSavedRevision = -1;
   bool _detailRecorded = false, _playerRecorded = false;
 
   Future<void> _record(String action) async {
@@ -107,7 +64,6 @@ class _ContentDetailScreenState extends State<ContentDetailScreen>
   void initState() {
     super.initState();
     _load();
-    _loadSaved();
   }
 
   Future<void> _load() async {
@@ -128,65 +84,6 @@ class _ContentDetailScreenState extends State<ContentDetailScreen>
       if (mounted) setState(() => _error = error.message);
     } finally {
       if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _loadSaved() async {
-    if (_checkingSaved || _saving) {
-      return;
-    }
-    setState(() {
-      _checkingSaved = true;
-      _savedError = null;
-    });
-    try {
-      final saved = await ApiService.isSaved(widget.contentId);
-      if (mounted) {
-        setState(() {
-          _saved = saved;
-          _seenSavedRevision = ApiService.savedRevision.value;
-        });
-      }
-    } on ApiException catch (error) {
-      if (mounted) {
-        setState(() => _savedError = error.message);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _checkingSaved = false);
-      }
-    }
-  }
-
-  Future<void> _toggleSaved() async {
-    if (_saving || _checkingSaved) {
-      return;
-    }
-    if (_saved == null) {
-      await _loadSaved();
-      return;
-    }
-    final next = !_saved!;
-    setState(() {
-      _saving = true;
-      _savedError = null;
-    });
-    try {
-      await ApiService.setSaved(widget.contentId, next);
-      if (mounted) {
-        setState(() {
-          _saved = next;
-          _seenSavedRevision = ApiService.savedRevision.value;
-        });
-      }
-    } on ApiException catch (error) {
-      if (mounted) {
-        setState(() => _savedError = error.message);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      }
     }
   }
 
@@ -329,47 +226,59 @@ class _ContentDetailScreenState extends State<ContentDetailScreen>
           : ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
               children: [
-                _DetailHeader(content: content),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: _saving || _checkingSaved ? null : _toggleSaved,
-                    icon: _saving || _checkingSaved
-                        ? const SizedBox(
-                            width: 17,
-                            height: 17,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(
-                            _saved == true
-                                ? Icons.bookmark
-                                : Icons.bookmark_border,
-                          ),
-                    label: Text(
-                      _checkingSaved
-                          ? 'Đang kiểm tra…'
-                          : _saved == null
-                          ? 'Kiểm tra mục đã lưu'
-                          : _saved!
-                          ? 'Đã lưu'
-                          : content.isMusic
-                          ? 'Lưu để nghe sau'
-                          : 'Lưu để xem sau',
-                    ),
-                  ),
+                _DetailArtwork(url: content.imageUrl, isMusic: content.isMusic),
+                const SizedBox(height: 20),
+                Text(
+                  content.title,
+                  style: Theme.of(context).textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
-                if (_savedError != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      _savedError!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+                if (content.artist != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    content.artist!,
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                if (!content.isMusic)
+                  _DetailRow(
+                    label: 'Đạo diễn',
+                    value: content.director ?? 'Chưa có thông tin',
+                  ),
+                if (content.genre != null)
+                  _DetailRow(label: 'Thể loại', value: content.genre!),
+                if (content.rating != null)
+                  _DetailRow(
+                    label: 'Điểm ${content.ratingSource ?? 'đã lưu'}',
+                    value: '★ ${content.rating}',
+                  ),
+                if (content.album != null)
+                  _DetailRow(label: 'Album', value: content.album!),
+                if (content.durationSeconds != null &&
+                    content.durationSeconds! > 0)
+                  _DetailRow(
+                    label: 'Thời lượng',
+                    value: _duration(content.durationSeconds!),
+                  ),
+                if (content.valence != null && content.arousal != null)
+                  _DetailRow(
+                    label: 'Tọa độ tâm trạng',
+                    value:
+                        'Valence ${content.valence!.toStringAsFixed(2)} · Arousal ${content.arousal!.toStringAsFixed(2)}',
+                  ),
+                if (content.description != null) ...[
+                  const SizedBox(height: 18),
+                  Text('Mô tả', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  Text(
+                    content.description!,
+                    style: const TextStyle(
+                      height: 1.5,
+                      color: AppColors.textSecondary,
                     ),
                   ),
-                const SizedBox(height: 22),
+                ],
                 if (!content.isMusic && trailerId != null) ...[
                   const SizedBox(height: 20),
                   Text(
@@ -377,7 +286,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen>
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
-                  if (!_covered && !_openingTrailer && !_ratingOpen)
+                  if (!_openingTrailer && !_ratingOpen)
                     YoutubePlayer(
                       key: ValueKey('youtube-inline-$trailerId'),
                       videoId: trailerId,
@@ -454,7 +363,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen>
                 if (content.isMusic) ...[
                   const SizedBox(height: 22),
                   if (_playerLoading) const LinearProgressIndicator(),
-                  if (!_covered && !_ratingOpen && _embedUrl != null)
+                  if (_embedUrl != null)
                     KeyedSubtree(
                       key: const ValueKey('spotify-inline-player'),
                       child: spotifyEmbed(_embedUrl!),
@@ -475,51 +384,6 @@ class _ContentDetailScreenState extends State<ContentDetailScreen>
                   const Text(
                     'Nghe trực tiếp bằng player phía trên. Thời lượng phát do Spotify cung cấp.',
                     style: TextStyle(fontSize: 12),
-                  ),
-                ],
-
-                if (content.description != null) ...[
-                  const SizedBox(height: 22),
-                  const SectionHeading('Về nội dung này'),
-                  Text(
-                    content.description!,
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(height: 1.6, color: AppColors.textSecondary),
-                  ),
-                ],
-                if (content.album != null)
-                  _DetailRow(label: 'Album', value: content.album!),
-                if (content.durationSeconds != null &&
-                    content.durationSeconds! > 0)
-                  _DetailRow(
-                    label: 'Thời lượng',
-                    value: _duration(content.durationSeconds!),
-                  ),
-                if (content.valence != null && content.arousal != null) ...[
-                  const SizedBox(height: 16),
-                  Card(
-                    child: ExpansionTile(
-                      key: PageStorageKey('content-tone-${widget.contentId}'),
-                      title: const Text(
-                        'Sắc thái nội dung',
-                        style: TextStyle(fontSize: 14),
-                      ),
-                      subtitle: Text(
-                        moodDescription(content.valence!, content.arousal!),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      children: [
-                        Text(
-                          'Valence ${content.valence!.toStringAsFixed(2)} · Arousal ${content.arousal!.toStringAsFixed(2)}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const Text(
-                          'Nhãn mô tả nội dung dùng cho gợi ý, không phải kết quả đo cảm xúc của bạn.',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ],
-                    ),
                   ),
                 ],
                 const SizedBox(height: 24),
@@ -546,78 +410,38 @@ class _ContentDetailScreenState extends State<ContentDetailScreen>
       '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
 }
 
-class _DetailHeader extends StatelessWidget {
-  const _DetailHeader({required this.content});
-  final ContentItem content;
+class _DetailArtwork extends StatelessWidget {
+  const _DetailArtwork({required this.url, required this.isMusic});
+  final String? url;
+  final bool isMusic;
+
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final width = (constraints.maxWidth * .34).clamp(88.0, 144.0);
-      final artwork = ContentArtwork(
-        url: content.imageUrl,
-        music: content.isMusic,
-        width: width,
-        height: content.isMusic ? width : width * 1.5,
-      );
-      final metadata = Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            content.isMusic ? 'ÂM NHẠC' : 'ĐIỆN ẢNH',
-            style: TextStyle(
-              fontSize: 10,
-              letterSpacing: 1.6,
-              fontWeight: FontWeight.w700,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(content.title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          if (content.isMusic && content.artist != null)
-            Text(
-              content.artist!,
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: AppColors.textSecondary),
-            ),
-          if (!content.isMusic)
-            Text(
-              'Đạo diễn: ${content.director ?? 'Chưa có thông tin'}',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          if (content.genre != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                content.genre!,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          if (content.rating != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Text(
-                '★ ${content.rating} · ${content.ratingSource ?? 'Điểm đã lưu'}',
-                style: const TextStyle(color: AppColors.warning, fontSize: 12),
-              ),
-            ),
-        ],
-      );
-      if (MediaQuery.textScalerOf(context).scale(14) > 22) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [artwork, const SizedBox(height: 16), metadata],
-        );
-      }
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          artwork,
-          const SizedBox(width: 18),
-          Expanded(child: metadata),
-        ],
-      );
-    },
+  Widget build(BuildContext context) {
+    final uri = url == null ? null : Uri.tryParse(url!);
+    final valid =
+        uri != null && (uri.scheme == 'https' || uri.scheme == 'http');
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: AspectRatio(
+        aspectRatio: isMusic ? 1 : 0.72,
+        child: valid
+            ? Image.network(
+                url!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => _placeholder(),
+              )
+            : _placeholder(),
+      ),
+    );
+  }
+
+  Widget _placeholder() => ColoredBox(
+    color: AppColors.surfaceSecondary,
+    child: Icon(
+      isMusic ? Icons.music_note : Icons.movie_outlined,
+      size: 54,
+      color: AppColors.textSecondary,
+    ),
   );
 }
 

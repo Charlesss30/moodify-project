@@ -165,7 +165,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byType(DropdownButtonFormField<int>));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('😊  Vui vẻ').last);
+    await tester.tap(find.text('Happy').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Xác nhận và nhận gợi ý'));
     await tester.pumpAndSettle();

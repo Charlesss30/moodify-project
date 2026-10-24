@@ -177,7 +177,13 @@
               <span>AI Mood Analysis</span>
             </div>
 
-            <textarea id="mood-input" rows="3" placeholder="Tell me how you're feeling..."></textarea>
+            <label class="ai-language-note" for="mood-language">Analysis language</label>
+            <select id="mood-language" aria-label="Analysis language">
+              <option value="en">English · RoBERTa VA</option>
+              <option value="vi">Tiếng Việt · PhoBERT</option>
+            </select>
+            <textarea id="mood-input" rows="3" placeholder="Describe how you're feeling in English..."></textarea>
+            <p id="mood-language-note" class="ai-language-note">The English RoBERTa VA model analyzes this text.</p>
 
             <div class="action-row">
               <button id="analyze-btn" class="small-primary-btn">

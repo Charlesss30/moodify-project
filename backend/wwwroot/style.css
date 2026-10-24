@@ -392,6 +392,24 @@ textarea::placeholder {
   font-size: 13px;
 }
 
+.ai-language-note {
+  margin: 4px 0 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+#mood-language {
+  display: block;
+  width: 100%;
+  margin: 4px 0 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(139, 92, 246, .28);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
 .action-row {
   display: flex;
   justify-content: flex-end;
@@ -413,6 +431,30 @@ textarea::placeholder {
   border: 1px solid rgba(139,92,246,.20);
   color: #DDD6FE;
   font-size: 12px;
+}
+
+.va-recommendation-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.mood-result h3 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+}
+
+.mood-result button {
+  margin-top: 8px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.mood-result button:disabled,
+#analyze-btn:disabled {
+  opacity: .65;
+  cursor: wait;
 }
 
 .bottom-nav {

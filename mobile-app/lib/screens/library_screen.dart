@@ -1,61 +1,30 @@
 import 'package:flutter/material.dart';
 
-import '../core/api_service.dart';
 import '../core/colors.dart';
+import '../core/api_service.dart';
 import '../models/mobile_models.dart';
-import '../widgets/app_widgets.dart';
 import 'content_detail_screen.dart';
-import 'saved_content_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
-  const LibraryScreen({super.key, this.savedRequest = 0, this.active = true});
-  final int savedRequest;
-  final bool active;
+  const LibraryScreen({super.key});
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
-  static const _batch = 20;
+  static const _catalogBatchSize = 20;
   final _searchController = TextEditingController();
-  final Map<String, List<ContentItem>> _loaded = {};
   List<ContentItem> _catalog = [];
-  String? _error;
-  String _type = 'Movie', _genre = 'Tất cả', _query = '';
-  int _visible = _batch;
-  bool _loading = false;
-  late bool _showSaved, _savedVisited;
-  int _savedRefreshRequest = 0;
-
+  String? _catalogError;
+  String? _catalogType;
+  String _catalogGenre = 'Tất cả';
+  String _searchQuery = '';
+  int _visibleCatalogCount = _catalogBatchSize;
+  bool _loadingCatalog = false;
   @override
   void initState() {
     super.initState();
-    _showSaved = _savedVisited = widget.savedRequest > 0;
-    if (!_showSaved) {
-      _load('Movie');
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant LibraryScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.savedRequest != oldWidget.savedRequest) {
-      setState(() {
-        _showSaved = _savedVisited = true;
-      });
-    }
-  }
-
-  void _selectCollection(bool saved) {
-    setState(() {
-      _showSaved = saved;
-      if (saved) {
-        _savedVisited = true;
-      }
-    });
-    if (!saved && _catalog.isEmpty && !_loading) {
-      _load(_type);
-    }
+    _loadCatalog('Movie');
   }
 
   @override
@@ -64,342 +33,284 @@ class _LibraryScreenState extends State<LibraryScreen> {
     super.dispose();
   }
 
-  Future<void> _load(String type, {bool refresh = false}) async {
-    if (_loading) return;
+  Future<void> _loadCatalog(String type) async {
+    if (_loadingCatalog) return;
     setState(() {
-      if (_type != type) {
-        _genre = 'Tất cả';
-        _catalog = _loaded[type] ?? [];
-      }
-      _type = type;
-      _loading = true;
-      _error = null;
-      _visible = _batch;
+      _catalogType = type;
+      _loadingCatalog = true;
+      _catalogError = null;
+      _catalog = [];
+      _catalogGenre = 'Tất cả';
+      _visibleCatalogCount = _catalogBatchSize;
     });
     try {
-      final items = !refresh && _loaded.containsKey(type)
-          ? _loaded[type]!
-          : await ApiService.catalog(type);
-      if (!mounted) return;
-      setState(() {
-        _catalog = items.where((x) => x.id.isNotEmpty).toList();
-        _loaded[type] = _catalog;
-        if (!_catalog.any((x) => x.genres.contains(_genre))) _genre = 'Tất cả';
-      });
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      final items = await ApiService.catalog(type);
+      if (mounted) {
+        setState(
+          () => _catalog = items.where((item) => item.id.isNotEmpty).toList(),
+        );
+      }
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _catalogError = error.message);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _loadingCatalog = false);
     }
   }
 
-  void _open(ContentItem item) => Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) => ContentDetailScreen(
-        contentId: item.id,
-        type: item.type,
-        recommendationId: item.recommendationId,
-      ),
-    ),
-  );
+  List<ContentItem> get _filteredCatalog {
+    final query = _searchQuery.trim().toLowerCase();
+    return _catalog
+        .where((item) {
+          final matchesGenre =
+              _catalogGenre == 'Tất cả' || item.genres.contains(_catalogGenre);
+          final searchable =
+              '${item.title} ${item.artist ?? ''} ${item.genre ?? ''}'
+                  .toLowerCase();
+          return matchesGenre && (query.isEmpty || searchable.contains(query));
+        })
+        .toList(growable: false);
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final query = _query.trim().toLowerCase();
-    final filtered = _catalog
-        .where(
-          (x) =>
-              (_genre == 'Tất cả' || x.genres.contains(_genre)) &&
-              (query.isEmpty ||
-                  '${x.title} ${x.artist ?? ''} ${x.director ?? ''} ${x.genre ?? ''}'
-                      .toLowerCase()
-                      .contains(query)),
-        )
-        .toList(growable: false);
-    final genres = _catalog.expand((x) => x.genres).toSet().toList()..sort();
-    final count = filtered.length < _visible ? filtered.length : _visible;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Thư viện'),
-        actions: [
-          IconButton(
-            tooltip: 'Tải lại thư viện',
-            onPressed: _showSaved
-                ? () => setState(() => _savedRefreshRequest++)
-                : _loading
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Thư viện'),
+      actions: [
+        IconButton(
+          tooltip: 'Tải lại thư viện',
+          onPressed: _loadingCatalog
+              ? null
+              : () => _loadCatalog(_catalogType ?? 'Movie'),
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+    ),
+    body: _buildCatalog(context),
+  );
+  Widget _buildCatalog(BuildContext context) {
+    final filtered = _filteredCatalog;
+    final visible = filtered.take(_visibleCatalogCount);
+    final genres = _catalog.expand((item) => item.genres).toSet().toList()
+      ..sort();
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+      children: [
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(
+              value: 'Movie',
+              label: Text('Phim'),
+              icon: Icon(Icons.movie_outlined),
+            ),
+            ButtonSegment(
+              value: 'Music',
+              label: Text('Nhạc'),
+              icon: Icon(Icons.music_note),
+            ),
+          ],
+          selected: {_catalogType ?? 'Movie'},
+          onSelectionChanged: _loadingCatalog
+              ? null
+              : (values) => _loadCatalog(values.first),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _searchController,
+          hintLocales: const [Locale('vi', 'VN'), Locale('en')],
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            labelText: 'Tìm trong thư viện',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _searchQuery.isEmpty
                 ? null
-                : () => _load(_type, refresh: true),
-            icon: const Icon(Icons.refresh),
+                : IconButton(
+                    tooltip: 'Xóa tìm kiếm',
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                    icon: const Icon(Icons.close),
+                  ),
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-            child: SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(
-                    value: false,
-                    label: Text('Kho nội dung'),
-                    icon: Icon(Icons.grid_view_outlined),
-                  ),
-                  ButtonSegment(
-                    value: true,
-                    label: Text('Đã lưu'),
-                    icon: Icon(Icons.bookmark_outline),
-                  ),
-                ],
-                selected: {_showSaved},
-                onSelectionChanged: (values) => _selectCollection(values.first),
-              ),
+          onChanged: (value) => setState(() {
+            _searchQuery = value;
+            _visibleCatalogCount = _catalogBatchSize;
+          }),
+        ),
+        const SizedBox(height: 12),
+        if (!_loadingCatalog && _catalogError == null && genres.isNotEmpty)
+          DropdownButtonFormField<String>(
+            key: ValueKey(_catalogGenre),
+            initialValue: _catalogGenre,
+            decoration: const InputDecoration(labelText: 'Thể loại'),
+            items: ['Tất cả', ...genres]
+                .map(
+                  (genre) => DropdownMenuItem(value: genre, child: Text(genre)),
+                )
+                .toList(),
+            onChanged: (genre) => setState(() {
+              _catalogGenre = genre ?? 'Tất cả';
+              _visibleCatalogCount = _catalogBatchSize;
+            }),
+          ),
+        if (_loadingCatalog)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(28),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (_catalogError != null)
+          _InlineError(
+            message: _catalogError!,
+            onRetry: () => _loadCatalog(_catalogType ?? 'Movie'),
+          )
+        else if (filtered.isEmpty)
+          const _EmptyMessage(
+            message: 'Không tìm thấy nội dung phù hợp trong thư viện.',
+          )
+        else ...[
+          const SizedBox(height: 8),
+          Text(
+            '${filtered.length} kết quả',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
             ),
           ),
-          Expanded(
-            child: IndexedStack(
-              index: _showSaved ? 1 : 0,
-              children: [
-                RefreshIndicator(
-                  onRefresh: () => _load(_type, refresh: true),
-                  child: CustomScrollView(
-                    key: const PageStorageKey('library-scroll'),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    slivers: [
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-                        sliver: SliverToBoxAdapter(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                'Tìm một bộ phim hay, một giai điệu hợp ý.',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                              const SizedBox(height: 18),
-                              SegmentedButton<String>(
-                                segments: const [
-                                  ButtonSegment(
-                                    value: 'Movie',
-                                    label: Text('Phim'),
-                                    icon: Icon(Icons.movie_outlined),
-                                  ),
-                                  ButtonSegment(
-                                    value: 'Music',
-                                    label: Text('Nhạc'),
-                                    icon: Icon(Icons.music_note),
-                                  ),
-                                ],
-                                selected: {_type},
-                                onSelectionChanged: _loading
-                                    ? null
-                                    : (v) => _load(v.first),
-                              ),
-                              const SizedBox(height: 16),
-                              TextField(
-                                controller: _searchController,
-                                hintLocales: const [
-                                  Locale('vi', 'VN'),
-                                  Locale('en'),
-                                ],
-                                textInputAction: TextInputAction.search,
-                                decoration: InputDecoration(
-                                  labelText: 'Tìm trong thư viện',
-                                  hintText: _type == 'Music'
-                                      ? 'Tên bài hát, nghệ sĩ, thể loại'
-                                      : 'Tên phim, đạo diễn, thể loại',
-                                  prefixIcon: const Icon(Icons.search),
-                                  suffixIcon: _query.isEmpty
-                                      ? null
-                                      : IconButton(
-                                          tooltip: 'Xóa tìm kiếm',
-                                          icon: const Icon(Icons.close),
-                                          onPressed: () {
-                                            _searchController.clear();
-                                            setState(() => _query = '');
-                                          },
-                                        ),
-                                ),
-                                onChanged: (v) => setState(() {
-                                  _query = v;
-                                  _visible = _batch;
-                                }),
-                              ),
-                              const SizedBox(height: 12),
-                              if (genres.isNotEmpty)
-                                DropdownButtonFormField<String>(
-                                  key: ValueKey(_genre),
-                                  initialValue: _genre,
-                                  isExpanded: true,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Thể loại',
-                                  ),
-                                  items: ['Tất cả', ...genres]
-                                      .map(
-                                        (g) => DropdownMenuItem(
-                                          value: g,
-                                          child: Text(
-                                            g,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                                  onChanged: (v) => setState(() {
-                                    _genre = v ?? 'Tất cả';
-                                    _visible = _batch;
-                                  }),
-                                ),
-                              const SizedBox(height: 16),
-                              if (_loading && _catalog.isNotEmpty)
-                                const LinearProgressIndicator(),
-                              if (_error != null)
-                                StatusCard(
-                                  message: _error!,
-                                  icon: Icons.wifi_off_rounded,
-                                  onRetry: () => _load(_type, refresh: true),
-                                ),
-                              if (!_loading && filtered.isNotEmpty)
-                                Text(
-                                  '${filtered.length} kết quả',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (_loading && _catalog.isEmpty)
-                        const SliverPadding(
-                          padding: EdgeInsets.symmetric(horizontal: 20),
-                          sliver: SliverToBoxAdapter(child: LoadingCards()),
-                        )
-                      else if (filtered.isEmpty)
-                        const SliverPadding(
-                          padding: EdgeInsets.symmetric(horizontal: 20),
-                          sliver: SliverToBoxAdapter(
-                            child: StatusCard(
-                              icon: Icons.search_off,
-                              title: 'Chưa tìm thấy nội dung',
-                              message: 'Thử tên khác hoặc chọn lại thể loại.',
-                            ),
-                          ),
-                        ),
-                      if (_type == 'Music')
-                        SliverPadding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          sliver: SliverList.builder(
-                            itemCount: count,
-                            itemBuilder: (_, i) => ContentListTile(
-                              item: filtered[i],
-                              onTap: () => _open(filtered[i]),
-                            ),
-                          ),
-                        )
-                      else
-                        SliverPadding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          sliver: SliverLayoutBuilder(
-                            builder: (context, constraints) {
-                              final columns =
-                                  (constraints.crossAxisExtent / 180)
-                                      .floor()
-                                      .clamp(2, 5);
-                              final width =
-                                  (constraints.crossAxisExtent -
-                                      (columns - 1) * 14) /
-                                  columns;
-                              final height =
-                                  width * 1.5 +
-                                  MediaQuery.textScalerOf(context).scale(86);
-                              return SliverGrid.builder(
-                                itemCount: count,
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: columns,
-                                      mainAxisExtent: height,
-                                      crossAxisSpacing: 14,
-                                      mainAxisSpacing: 14,
-                                    ),
-                                itemBuilder: (context, i) {
-                                  final item = filtered[i];
-                                  return Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(14),
-                                      onTap: () => _open(item),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          ContentArtwork(
-                                            url: item.imageUrl,
-                                            width: width,
-                                            height: width * 1.5,
-                                          ),
-                                          const SizedBox(height: 9),
-                                          Text(
-                                            item.title,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleSmall,
-                                          ),
-                                          const SizedBox(height: 3),
-                                          Text(
-                                            [
-                                              if (item.rating != null)
-                                                '★ ${item.rating}',
-                                              if (item.genre != null)
-                                                item.genre!,
-                                            ].join(' · '),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              color: AppColors.textSecondary,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                        ),
-                      if (count < filtered.length)
-                        SliverPadding(
-                          padding: const EdgeInsets.all(20),
-                          sliver: SliverToBoxAdapter(
-                            child: OutlinedButton(
-                              onPressed: () =>
-                                  setState(() => _visible += _batch),
-                              child: const Text('Hiển thị thêm'),
-                            ),
-                          ),
-                        ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 28)),
-                    ],
-                  ),
-                ),
-                _savedVisited
-                    ? SavedContentScreen(
-                        embedded: true,
-                        active: widget.active && _showSaved,
-                        refreshRequest: _savedRefreshRequest,
-                      )
-                    : const SizedBox.shrink(),
-              ],
-            ),
+          ...visible.map(
+            (item) =>
+                _CatalogCard(item: item, onOpen: () => _openDetails(item)),
           ),
+          if (_visibleCatalogCount < filtered.length)
+            OutlinedButton(
+              onPressed: () =>
+                  setState(() => _visibleCatalogCount += _catalogBatchSize),
+              child: const Text('Hiển thị thêm'),
+            ),
         ],
+      ],
+    );
+  }
+
+  void _openDetails(ContentItem item) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ContentDetailScreen(
+          contentId: item.id,
+          type: item.type,
+          recommendationId: item.recommendationId,
+        ),
       ),
     );
   }
+}
+
+class _CatalogCard extends StatelessWidget {
+  const _CatalogCard({required this.item, required this.onOpen});
+  final ContentItem item;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(top: 10),
+    child: ListTile(
+      onTap: onOpen,
+      leading: _Artwork(
+        url: item.imageUrl,
+        type: item.type,
+        width: 50,
+        height: 62,
+      ),
+      title: Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        item.isMusic
+            ? [item.artist, item.genre]
+                  .whereType<String>()
+                  .where((value) => value.isNotEmpty)
+                  .join(' · ')
+            : [
+                item.genre,
+                if (item.rating != null) '★ ${item.rating}',
+              ].whereType<String>().join(' · '),
+      ),
+      trailing: const Icon(Icons.chevron_right),
+    ),
+  );
+}
+
+class _Artwork extends StatelessWidget {
+  const _Artwork({
+    required this.url,
+    required this.type,
+    required this.width,
+    required this.height,
+  });
+  final String? url;
+  final String type;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final uri = url == null ? null : Uri.tryParse(url!);
+    final valid =
+        uri != null && (uri.scheme == 'https' || uri.scheme == 'http');
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: valid
+            ? Image.network(
+                url!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => _fallback(),
+              )
+            : _fallback(),
+      ),
+    );
+  }
+
+  Widget _fallback() => ColoredBox(
+    color: AppColors.surfaceSecondary,
+    child: Icon(
+      type == 'Music' ? Icons.music_note : Icons.movie_outlined,
+      color: AppColors.textSecondary,
+    ),
+  );
+}
+
+class _InlineError extends StatelessWidget {
+  const _InlineError({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: ListTile(
+      leading: const Icon(Icons.cloud_off, color: AppColors.warning),
+      title: Text(message),
+      trailing: IconButton(
+        tooltip: 'Thử lại',
+        onPressed: onRetry,
+        icon: const Icon(Icons.refresh),
+      ),
+    ),
+  );
+}
+
+class _EmptyMessage extends StatelessWidget {
+  const _EmptyMessage({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 24),
+    child: Text(
+      message,
+      textAlign: TextAlign.center,
+      style: const TextStyle(color: AppColors.textSecondary),
+    ),
+  );
 }

@@ -1,4 +1,4 @@
-﻿const API_BASE_URL = "/api";
+const API_BASE_URL = "/api";
 
 // ==============================
 // STATE
@@ -715,6 +715,19 @@ const analyzeButton =
         "analyze-btn"
     );
 
+const moodLanguage = document.getElementById("mood-language");
+if (moodLanguage) {
+    moodLanguage.addEventListener("change", () => {
+        const input = document.getElementById("mood-input");
+        const note = document.getElementById("mood-language-note");
+        const isVietnamese = moodLanguage.value === "vi";
+        if (input) input.placeholder = isVietnamese ? "Hãy mô tả cảm xúc của bạn bằng tiếng Việt..." : "Describe how you're feeling in English...";
+        if (note) note.textContent = isVietnamese
+            ? "PhoBERT hiển thị 3 nhãn cảm xúc hàng đầu; gợi ý dùng tọa độ VA tổng hợp từ phân bố lớp."
+            : "RoBERTa estimates valence/arousal; the page also shows the three closest moods.";
+    });
+}
+
 if (analyzeButton) {
 
     analyzeButton.addEventListener(
@@ -735,6 +748,7 @@ if (analyzeButton) {
 
             const text =
                 input.value.trim();
+            const language = moodLanguage?.value === "vi" ? "vi" : "en";
 
             if (!text) {
 
@@ -747,27 +761,112 @@ if (analyzeButton) {
 
                 return;
             }
+            const token = sessionStorage.getItem("moodify_user_token");
+            if (!token) {
+                result.textContent = "Your session has expired. Please sign in again.";
+                result.classList.remove("hidden");
+                return;
+            }
 
-            // ==========================================
-            // SAU NÀY KẾT NỐI BACKEND
-            // ==========================================
-            //
-            // POST /api/mood/analyze
-            //
-            // Body:
-            //
-            // {
-            //     "vanBanDauVao": text
-            // }
-            //
-            // ==========================================
+            analyzeButton.disabled = true;
+            analyzeButton.textContent = "Analyzing…";
+            result.textContent = language === "vi" ? "Đang phân tích bằng PhoBERT tiếng Việt…" : "Analyzing your mood with RoBERTa VA…";
+            result.classList.remove("hidden");
 
-            result.textContent =
-                "Your mood description has been received. AI analysis is not connected yet.";
+            try {
+                const response = await fetch(`${API_BASE_URL}/MoodAnalysis/valence-arousal`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ text, language })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || "The VA model is unavailable.");
 
-            result.classList.remove(
-                "hidden"
-            );
+                result.replaceChildren();
+                const summary = document.createElement("p");
+                summary.textContent = `${language === "vi" ? "Mood ứng dụng gần nhất" : "Nearest app mood"}: ${data.mood.tenTamTrang} · Valence ${Number(data.valence).toFixed(2)} · Arousal ${Number(data.arousal).toFixed(2)}`;
+                result.append(summary);
+
+                const alternatives = language === "vi"
+                    ? (data.emotionCandidates || []).map(item => `${item.label} (${Math.round(Number(item.score) * 100)}%)`)
+                    : (data.moodCandidates || []).filter(item => Number(item.moodId ?? item.MoodId) !== Number(data.mood.tamTrangID))
+                        .map(item => item.moodName ?? item.MoodName).filter(Boolean);
+                if (alternatives.length) {
+                    const candidateLine = document.createElement("p");
+                    candidateLine.textContent = language === "vi"
+                        ? `Các nhãn PhoBERT hàng đầu: ${alternatives.join(" · ")}`
+                        : `Các mood gần tọa độ VA: ${alternatives.join(" · ")}`;
+                    result.append(candidateLine);
+                }
+
+                if (language === "vi" && data.accepted === false) {
+                    const uncertainty = document.createElement("p");
+                    uncertainty.textContent = "Độ tin cậy dưới ngưỡng kiểm định; hãy diễn đạt rõ hơn rồi thử lại trước khi dùng gợi ý này.";
+                    result.append(uncertainty);
+                    return;
+                }
+
+                const recommend = document.createElement("button");
+                recommend.type = "button";
+                recommend.className = "small-primary-btn";
+                recommend.textContent = language === "vi" ? "Gợi ý phim và nhạc theo điểm cảm xúc tổng hợp" : "Recommend movies and music from the VA score";
+                recommend.addEventListener("click", async () => {
+                    recommend.disabled = true;
+                    recommend.textContent = language === "vi" ? "Đang tìm phim và nhạc…" : "Finding recommendations…";
+                    try {
+                        const recResponse = await fetch(`${API_BASE_URL}/Recommendation`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${token}`
+                            },
+                            body: JSON.stringify({
+                                mode: "mood",
+                                source: "ai_va",
+                                modelVersion: data.modelVersion,
+                                tamTrangID: data.mood.tamTrangID,
+                                valence: data.valence,
+                                arousal: data.arousal,
+                                limit: 12,
+                                balanced: true
+                            })
+                        });
+                        const recommendations = await recResponse.json();
+                        if (!recResponse.ok) throw new Error(recommendations.message || "Could not load recommendations.");
+                        const heading = document.createElement("h3");
+                        heading.textContent = language === "vi" ? "Phim và nhạc phù hợp với cảm xúc" : "Movies and music for this mood";
+                        const list = document.createElement("ul");
+                        list.className = "va-recommendation-list";
+                        for (const item of recommendations.items || []) {
+                            const row = document.createElement("li");
+                            const content = item.content || {};
+                            const title = content.tieuDe || content.title || "Untitled";
+                            const type = content.loaiNoiDung || content.contentType || "Content";
+                            row.textContent = `${title} · ${type}`;
+                            list.append(row);
+                        }
+                        if (!list.children.length) {
+                            const empty = document.createElement("li");
+                            empty.textContent = "No matching content is available yet.";
+                            list.append(empty);
+                        }
+                        result.append(heading, list);
+                        recommend.textContent = language === "vi" ? "Đã tải gợi ý" : "Recommendations loaded";
+                    } catch (error) {
+                        recommend.disabled = false;
+                        recommend.textContent = error.message || "Retry recommendations";
+                    }
+                });
+                result.append(recommend);
+            } catch (error) {
+                result.textContent = error.message || "Unable to analyze your mood.";
+            } finally {
+                analyzeButton.disabled = false;
+                analyzeButton.textContent = "Analyze Mood";
+            }
         }
     );
 }

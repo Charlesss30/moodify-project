@@ -1,288 +1,203 @@
+import 'activity_history_screen.dart';
+
 import 'package:flutter/material.dart';
 
 import '../core/api_service.dart';
-import '../core/presentation.dart';
 import '../core/colors.dart';
 import '../models/mobile_models.dart';
-import '../widgets/app_widgets.dart';
-import 'activity_history_screen.dart';
-import 'content_detail_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
+
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  int _tab = 0;
-  bool _activityVisited = false;
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Lịch sử')),
-    body: Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          child: SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<int>(
-              segments: const [
-                ButtonSegment(value: 0, label: Text('Tâm trạng')),
-                ButtonSegment(value: 1, label: Text('Hoạt động')),
-              ],
-              selected: {_tab},
-              onSelectionChanged: (v) => setState(() {
-                _tab = v.first;
-                if (_tab == 1) _activityVisited = true;
-              }),
-            ),
-          ),
-        ),
-        Expanded(
-          child: IndexedStack(
-            index: _tab,
-            children: [
-              const _MoodHistoryPanel(),
-              _activityVisited
-                  ? const ActivityHistoryScreen(embedded: true)
-                  : const SizedBox.shrink(),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _MoodHistoryPanel extends StatefulWidget {
-  const _MoodHistoryPanel();
-  @override
-  State<_MoodHistoryPanel> createState() => _MoodHistoryPanelState();
-}
-
-class _MoodHistoryPanelState extends State<_MoodHistoryPanel> {
   final List<MoodHistoryEntry> _entries = [];
-  int _page = 0, _total = 0, _range = 30, _generation = 0;
-  bool _loading = true, _loadingMore = false;
+  int _page = 0;
+  int _total = 0;
+  int _rangeDays = 30;
+  bool _loading = true;
+  bool _loadingMore = false;
   String? _error;
-  bool _retryReset = true;
+
   @override
   void initState() {
     super.initState();
-    ApiService.historyRevision.addListener(_reload);
-    _load(reset: true);
+    ApiService.historyRevision.addListener(_refreshHistory);
+    _loadFirstPage();
   }
 
-  void _reload() {
-    if (mounted) _load(reset: true);
+  int _generation = 0;
+  void _refreshHistory() {
+    if (mounted) _loadFirstPage();
   }
 
   @override
   void dispose() {
-    ApiService.historyRevision.removeListener(_reload);
+    ApiService.historyRevision.removeListener(_refreshHistory);
     super.dispose();
   }
 
-  Future<void> _load({bool reset = false}) async {
-    if (!reset && (_loading || _loadingMore || _entries.length >= _total)) {
-      return;
-    }
-    final generation = reset ? ++_generation : _generation;
+  Future<void> _loadFirstPage() async {
+    final generation = ++_generation;
     setState(() {
+      _loading = true;
+      _loadingMore = false;
       _error = null;
-      if (reset) {
-        _loading = true;
-        _loadingMore = false;
-      } else {
-        _loadingMore = true;
-      }
+      _entries.clear();
+      _page = 0;
     });
     try {
-      final result = await ApiService.history(reset ? 1 : _page + 1);
+      final result = await ApiService.history(1);
       if (!mounted || generation != _generation) return;
       setState(() {
-        if (reset) _entries.clear();
         _entries.addAll(result.items);
         _page = result.page;
         _total = result.total;
       });
-    } on ApiException catch (e) {
+    } on ApiException catch (error) {
       if (mounted && generation == _generation) {
-        setState(() {
-          _error = e.message;
-          _retryReset = reset;
-        });
+        setState(() => _error = error.message);
       }
     } finally {
       if (mounted && generation == _generation) {
-        setState(() {
-          _loading = false;
-          _loadingMore = false;
-        });
+        setState(() => _loading = false);
       }
     }
   }
 
+  Future<void> _loadMore() async {
+    if (_loading || _loadingMore || _entries.length >= _total) return;
+    final generation = _generation;
+    setState(() {
+      _loadingMore = true;
+      _error = null;
+    });
+    try {
+      final result = await ApiService.history(_page + 1);
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _entries.addAll(result.items);
+        _page = result.page;
+        _total = result.total;
+      });
+    } on ApiException catch (error) {
+      if (mounted && generation == _generation) {
+        setState(() => _error = error.message);
+      }
+    } finally {
+      if (mounted && generation == _generation) {
+        setState(() => _loadingMore = false);
+      }
+    }
+  }
+
+  List<MoodHistoryEntry> get _filtered {
+    if (_rangeDays == 0) return _entries;
+    final since = DateTime.now().subtract(Duration(days: _rangeDays));
+    return _entries
+        .where((entry) => entry.createdAt?.isAfter(since) ?? false)
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final since = DateTime.now().subtract(Duration(days: _range));
-    final entries = _range == 0
-        ? _entries
-        : _entries.where((e) => e.createdAt?.isAfter(since) ?? false).toList();
-    return RefreshIndicator(
-      onRefresh: () => _load(reset: true),
-      child: CustomScrollView(
-        key: const PageStorageKey('mood-history-scroll'),
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Tâm trạng và gợi ý',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Tải lại',
-                        onPressed: _loading ? null : () => _load(reset: true),
-                        icon: const Icon(Icons.refresh),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    'Nhìn lại cảm xúc và những nội dung từng được đề xuất.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: SegmentedButton<int>(
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(value: 7, label: Text('7 ngày')),
-                        ButtonSegment(value: 30, label: Text('30 ngày')),
-                        ButtonSegment(value: 90, label: Text('90 ngày')),
-                        ButtonSegment(value: 0, label: Text('Tất cả')),
-                      ],
-                      selected: {_range},
-                      onSelectionChanged: (v) =>
-                          setState(() => _range = v.first),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    '${_entries.length} / $_total bản ghi đã tải. Bộ lọc áp dụng trên các bản ghi này.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-
-                  if (entries.isNotEmpty)
-                    Card(
-                      child: ExpansionTile(
-                        key: const PageStorageKey('mood-history-chart'),
-                        title: const Text(
-                          'Biểu đồ các bản ghi đã tải',
-                          style: TextStyle(fontSize: 14),
-                        ),
-                        subtitle: const Text(
-                          'Tím: cảm xúc · Xanh: năng lượng',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        childrenPadding: const EdgeInsets.fromLTRB(
-                          16,
-                          0,
-                          16,
-                          16,
-                        ),
-                        children: [
-                          const Text(
-                            'Thang −1 đến +1. Mỗi chấm là một bản ghi, đặt theo thời gian.',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          SizedBox(
-                            height: 170,
-                            width: double.infinity,
-                            child: RepaintBoundary(
-                              child: CustomPaint(
-                                painter: _MoodChartPainter(entries),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (_loading && _entries.isNotEmpty)
-                    const LinearProgressIndicator(),
-                  if (_error != null)
-                    StatusCard(
-                      message: _error!,
-                      onRetry: () => _load(reset: _retryReset),
-                    ),
-                  if (_loading && _entries.isEmpty) const LoadingCards(),
-                  if (!_loading && entries.isEmpty && _error == null)
-                    const StatusCard(
-                      icon: Icons.history,
-                      title: 'Chưa có lịch sử trong khoảng này',
-                      message: 'Các lần nhận gợi ý sẽ được lưu tại đây. Bạn có thể tải thêm bản ghi cũ nếu còn.',
-                    ),
-                  const SizedBox(height: 12),
-                ],
+    final entries = _filtered;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Lịch sử tâm trạng'),
+        actions: [
+          IconButton(
+            tooltip: 'L?ch s? t??ng t?c',
+            icon: const Icon(Icons.touch_app),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const ActivityHistoryScreen(),
               ),
             ),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverList.builder(
-              itemCount: entries.length,
-              itemBuilder: (context, i) {
-                final entry = entries[i];
-                final date = shortDate(
-                  entry.createdAt?.toIso8601String(),
-                  year: true,
-                );
-                final previous = i > 0
-                    ? shortDate(
-                        entries[i - 1].createdAt?.toIso8601String(),
-                        year: true,
-                      )
-                    : null;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (date != previous)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10, top: 6),
-                        child: Text(
-                          date,
-                          style: Theme.of(context).textTheme.labelLarge,
-                        ),
-                      ),
-                    _HistoryTile(entry: entry),
-                  ],
-                );
-              },
-            ),
+          IconButton(
+            tooltip: 'Tải lại',
+            onPressed: _loading ? null : _loadFirstPage,
+            icon: const Icon(Icons.refresh),
           ),
-          if (_entries.length < _total)
-            SliverPadding(
-              padding: const EdgeInsets.all(20),
-              sliver: SliverToBoxAdapter(
-                child: OutlinedButton(
-                  onPressed: _loading || _loadingMore ? null : () => _load(),
-                  child: Text(_loadingMore ? 'Đang tải…' : 'Tải thêm lịch sử'),
-                ),
-              ),
-            ),
-          const SliverToBoxAdapter(child: SizedBox(height: 20)),
         ],
       ),
+      body: _loading && _entries.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+              children: [
+                if (_error != null)
+                  _HistoryError(message: _error!, onRetry: _loadFirstPage),
+                SegmentedButton<int>(
+                  segments: const [
+                    ButtonSegment(value: 7, label: Text('7 ngày')),
+                    ButtonSegment(value: 30, label: Text('30 ngày')),
+                    ButtonSegment(value: 90, label: Text('90 ngày')),
+                    ButtonSegment(value: 0, label: Text('Tất cả')),
+                  ],
+                  selected: {_rangeDays},
+                  onSelectionChanged: (values) =>
+                      setState(() => _rangeDays = values.first),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Tích cực (tím) / Năng lượng (xanh) · −1 đến 1',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Biểu đồ dùng ${entries.length} bản ghi đã tải (${_entries.length} / $_total).',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (entries.isEmpty)
+                  const _HistoryEmpty(
+                    message: 'Chưa có bản ghi trong khoảng thời gian này.',
+                  )
+                else
+                  Container(
+                    height: 190,
+                    margin: const EdgeInsets.only(bottom: 18),
+                    padding: const EdgeInsets.fromLTRB(8, 14, 16, 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: .06),
+                      ),
+                    ),
+                    child: CustomPaint(
+                      painter: _MoodChartPainter(entries),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                if (!_loading && _entries.isEmpty && _error == null)
+                  const _HistoryEmpty(
+                    message: 'Bạn chưa có lịch sử yêu cầu gợi ý.',
+                  ),
+                for (final entry in entries) _HistoryTile(entry: entry),
+                if (_entries.length < _total)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: OutlinedButton(
+                      onPressed: _loadingMore ? null : _loadMore,
+                      child: _loadingMore
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Tải thêm lịch sử'),
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 }
@@ -290,92 +205,121 @@ class _MoodHistoryPanelState extends State<_MoodHistoryPanel> {
 class _HistoryTile extends StatelessWidget {
   const _HistoryTile({required this.entry});
   final MoodHistoryEntry entry;
+
   @override
   Widget build(BuildContext context) {
     final recommendations = entry.recommendedItems;
     return Card(
+      margin: const EdgeInsets.only(top: 10),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Text(
-                  moodEmoji(entry.moodName),
-                  style: const TextStyle(fontSize: 25),
-                ),
-                const SizedBox(width: 10),
+                const Icon(Icons.mood_outlined, color: AppColors.accentPrimary),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     entry.moodName.isEmpty
                         ? 'Tâm trạng #${entry.moodId}'
-                        : moodName(entry.moodName),
-                    style: Theme.of(context).textTheme.titleMedium,
+                        : entry.moodName,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
                 Text(
-                  timeOfDay(entry.createdAt),
-                  style: Theme.of(context).textTheme.bodySmall,
+                  _date(entry.createdAt),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              moodDescription(entry.valence, entry.arousal),
-              style: Theme.of(context).textTheme.bodySmall,
+              'Valence ${entry.valence.toStringAsFixed(2)} · Arousal ${entry.arousal.toStringAsFixed(2)}',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             if (recommendations == null)
-              const Text('Bản ghi cũ chưa lưu danh sách nội dung được gợi ý.')
+              const Text(
+                'Bản ghi cũ chưa lưu danh sách nội dung được gợi ý.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              )
             else if (recommendations.isEmpty)
-              const Text('Lần yêu cầu này không có nội dung phù hợp.')
+              const Text(
+                'Lần yêu cầu này không có nội dung phù hợp.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              )
             else
-              ExpansionTile(
-                // Each entry must store its bool separately from the scroll offset.
-                key: PageStorageKey('mood-history-entry-${entry.id}'),
-                tilePadding: EdgeInsets.zero,
-                childrenPadding: EdgeInsets.zero,
-                title: Text(
-                  '${recommendations.length} nội dung được gợi ý',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                children: [
-                  for (final item in recommendations)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: ContentArtwork(
-                        url: item.imageUrl,
-                        music: item.isMusic,
-                        width: 38,
-                        height: 48,
-                        radius: 7,
+              ...recommendations.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Row(
+                    children: [
+                      Icon(
+                        item.isMusic ? Icons.music_note : Icons.movie_outlined,
+                        size: 16,
+                        color: AppColors.accentPrimary,
                       ),
-                      title: Text(
-                        item.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(item.isMusic ? 'Âm nhạc' : 'Phim'),
-                      trailing: const Icon(Icons.chevron_right, size: 18),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => ContentDetailScreen(
-                            contentId: item.id,
-                            type: item.type,
-                            recommendationId:
-                                entry.recommendationId ?? item.recommendationId,
-                          ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                ],
+                    ],
+                  ),
+                ),
               ),
           ],
         ),
       ),
     );
   }
+
+  String _date(DateTime? value) => value == null
+      ? 'Không rõ ngày'
+      : '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+}
+
+class _HistoryEmpty extends StatelessWidget {
+  const _HistoryEmpty({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 26),
+    child: Center(
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: AppColors.textSecondary),
+      ),
+    ),
+  );
+}
+
+class _HistoryError extends StatelessWidget {
+  const _HistoryError({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: ListTile(
+      leading: const Icon(Icons.cloud_off, color: AppColors.warning),
+      title: Text(message),
+      trailing: IconButton(onPressed: onRetry, icon: const Icon(Icons.refresh)),
+    ),
+  );
 }
 
 class _MoodChartPainter extends CustomPainter {
@@ -406,7 +350,7 @@ class _MoodChartPainter extends CustomPainter {
     if (ordered.isEmpty) return;
     for (final series in [
       (AppColors.accentPrimary, (MoodHistoryEntry entry) => entry.valence),
-      (const Color(0xFF71D7D2), (MoodHistoryEntry entry) => entry.arousal),
+      (AppColors.accentSecondary, (MoodHistoryEntry entry) => entry.arousal),
     ]) {
       final paint = Paint()
         ..color = series.$1

@@ -62,49 +62,6 @@ public static class AiWorkspaceTests
         await call("POST", "/AiWorkspace/feedback/export", new { }, 403, user);
         var feedback = await call("POST", "/AiWorkspace/feedback/export", new { }, 200, engineer);
         check(!feedback!.ToJsonString().Contains("accountId") && !feedback.ToJsonString().Contains("comment" + "\":"), "Feedback export exposed identities/comments.");
-        await call("GET", "/AiWorkspace/worker", null, 403, user);
-        await call("GET", "/AiWorkspace/worker", null, 403, admin);
-        await call("POST", $"/AiWorkspace/jobs/{id}/start", new { revision = 0 }, 403, user);
-        await call("GET", $"/AiWorkspace/jobs/{id}/progress", null, 403, user);
-        var local=await call("POST", "/AiWorkspace/jobs", new {datasetId,modelVersion="local_fixture",epochs=1,batchSize=8},200,engineer);
-        var localId=local!["id"]!.GetValue<string>();
-        if(Environment.GetEnvironmentVariable("MOODIFY_TRAINING_TEST_MODEL") is null) {
-            await call("POST",$"/AiWorkspace/jobs/{localId}/start",new {revision=0},503,engineer);
-        } else {
-            await call("POST",$"/AiWorkspace/jobs/{localId}/start",new {revision=99},409,engineer);
-            await call("POST",$"/AiWorkspace/jobs/{localId}/start",new {revision=0},200,engineer);
-            await call("POST",$"/AiWorkspace/jobs/{localId}/start",new {revision=0},409,engineer);
-            await call("POST",$"/AiWorkspace/jobs/{localId}/state",new {revision=1,state="failed"},409,engineer);
-            JsonNode? progress=null;
-            for(var attempt=0;attempt<180;attempt++){
-                progress=await call("GET",$"/AiWorkspace/jobs/{localId}/progress",null,200,engineer);
-                if(progress!["job"]!["status"]!.GetValue<string>() is "completed" or "failed")break;
-                await Task.Delay(1000);
-            }
-            check(progress!["job"]!["status"]!.GetValue<string>()=="completed", "Real tiny-model worker failed: "+progress.ToJsonString());
-            check(progress["artifactAvailable"]!.GetValue<bool>(),"Local artifact was not verified.");
-            check(progress["job"]!["report"]!["artifactHash"]!.GetValue<string>() != progress["job"]!["baseArtifactHash"]!.GetValue<string>(),"Training did not change the tiny model weights.");
-            await call("GET",$"/AiWorkspace/jobs/{localId}/artifact",null,200,engineer);
-            var stopped=await call("POST","/AiWorkspace/jobs",new {datasetId,modelVersion="stop_fixture",epochs=10,batchSize=1},200,engineer);
-            var stopId=stopped!["id"]!.GetValue<string>();
-            await call("POST",$"/AiWorkspace/jobs/{stopId}/start",new {revision=0},200,engineer);
-            for(var attempt=0;attempt<30;attempt++){
-                progress=await call("GET",$"/AiWorkspace/jobs/{stopId}/progress",null,200,engineer);
-                if(progress!["job"]!["status"]!.GetValue<string>()=="running" && progress["job"]!["workerPid"] is not null)break;
-                await Task.Delay(200);
-            }
-            await call("POST",$"/AiWorkspace/jobs/{stopId}/cancel",new {revision=progress!["job"]!["revision"]!.GetValue<int>()},200,engineer);
-            for(var attempt=0;attempt<30;attempt++){
-                progress=await call("GET",$"/AiWorkspace/jobs/{stopId}/progress",null,200,engineer);
-                if(progress!["job"]!["status"]!.GetValue<string>()=="cancelled")break;
-                await Task.Delay(200);
-            }
-            check(progress!["job"]!["status"]!.GetValue<string>()=="cancelled","Cancel did not stop local job.");
-            var pid=progress["job"]!["workerPid"]!.GetValue<int>();
-            var exited=false;
-            try { using var child=System.Diagnostics.Process.GetProcessById(pid); exited=child.HasExited; } catch(ArgumentException) { exited=true; }
-            check(exited,"Cancelled training process is still running.");
-        }
         await call("GET", "/Users", null, 403, engineer);
     }
 }

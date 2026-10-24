@@ -1,9 +1,9 @@
 # Moodify AI inference service
 
-This service uses the existing local RoBERTa artifact; it never downloads a
-model or sends text to a third party. It is English-only and is disabled unless
-`AI_MODEL_ENABLED=true` is explicitly set. The weights are not copied into this
-directory.
+This service can load the local emotion-classification model and the separate
+EmoBank RoBERTa valence/arousal (VA) checkpoint. It never sends text to a third
+party. The VA model accepts English only and is enabled with
+`VA_MODEL_ENABLED=true`. Model artifacts remain outside this source folder.
 
 The default `MODEL_DIR` resolves to the local `best_model` folder, which is
 excluded from Git and must be supplied separately. Set
@@ -43,6 +43,34 @@ uses CPU. `POST /predict` accepts
 `{"text":"...","language":"en"}`. Whitespace, 1–4000 character bounds, and
 128-token bounds are validated; long input is rejected, never silently cut.
 Concurrent inference beyond the single active slot returns 429.
+
+## Valence/arousal regression model
+
+The checkpoint is expected at
+`code-train/train-KLCN/output/roberta_va_regression/roberta_va_regression.pt`
+with its tokenizer at `.../tokenizer/tokenizer.json`. The adapter recreates
+`RobertaModel(roberta-base) + CLS + Dropout(0.3) + Linear(768, 2)` from
+`emobank.ipynb`, loads the `state_dict` with `weights_only` mode, and uses the
+same 128-token input length. Outputs are clamped to the training target range
+`[-1, 1]`.
+
+The local runner enables VA automatically when the checkpoint and tokenizer
+are present. For a manual service start, set:
+
+```powershell
+$env:VA_MODEL_ENABLED = "true"
+$env:VA_MODEL_DIR = (Resolve-Path "..\code-train\train-KLCN\output\roberta_va_regression").Path
+$env:VA_CHECKPOINT = Join-Path $env:VA_MODEL_DIR "roberta_va_regression.pt"
+$env:VA_TOKENIZER_DIR = Join-Path $env:VA_MODEL_DIR "tokenizer"
+```
+
+`GET /health/va/ready` checks this model; `POST /predict-va` returns its VA
+coordinates. The authenticated backend endpoint
+`POST /api/MoodAnalysis/valence-arousal` finds the nearest configured mood.
+The web page then sends the predicted coordinates and mood ID to the existing
+recommendation endpoint so content ranking uses the model output. This model
+has a separate lifecycle from the 28-label model registry. No independent
+quality validation is claimed for this checkpoint.
 
 The dependency file retains the exported deployment's supported ranges and
 Transformers version; it is not a post-smoke lockfile. Controlled local service

@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/mobile_models.dart';
-import '../models/personal_models.dart';
 import '../models/session_user.dart';
 import '../services/mood_analysis/mood_analyzer.dart';
 
@@ -23,9 +22,6 @@ class ApiService {
   static String? _token;
   static int _sessionVersion = 0;
   static final historyRevision = ValueNotifier<int>(0);
-  static final activityRevision = ValueNotifier<int>(0);
-  static final ratingsRevision = ValueNotifier<int>(0);
-  static final savedRevision = ValueNotifier<int>(0);
   @visibleForTesting
   static http.Client Function() clientFactory = http.Client.new;
   @visibleForTesting
@@ -126,9 +122,7 @@ class ApiService {
     } on TimeoutException {
       throw const ApiException('Máy chủ phản hồi quá lâu. Hãy thử lại.');
     } on http.ClientException {
-      throw const ApiException(
-        'Chưa kết nối được dịch vụ. Hãy kiểm tra mạng và thử lại.',
-      );
+      throw ApiException('Không thể kết nối máy chủ tại $baseUrl.');
     } on FormatException {
       throw const ApiException('Máy chủ trả về dữ liệu không hợp lệ.');
     } finally {
@@ -200,30 +194,6 @@ class ApiService {
 
   static Future<SessionUser> me() async =>
       SessionUser.fromJson(_object(await request('/Auth/me')));
-  static Future<SessionUser> updateAccountProfile({
-    required String username,
-    required String email,
-    String? currentPassword,
-    String? avatarDataUrl,
-  }) async {
-    final body = <String, dynamic>{'tenDangNhap': username, 'email': email};
-    if (currentPassword != null) body['currentPassword'] = currentPassword;
-    if (avatarDataUrl != null) body['avatarDataUrl'] = avatarDataUrl;
-    return SessionUser.fromJson(
-      _object(await request('/Account/profile', method: 'PUT', body: body)),
-    );
-  }
-
-  static Future<void> changePassword({
-    required String currentPassword,
-    required String newPassword,
-  }) async {
-    await request(
-      '/Account/password',
-      method: 'PUT',
-      body: {'currentPassword': currentPassword, 'newPassword': newPassword},
-    );
-  }
 
   static Future<List<Mood>> moods() async {
     final response = await request('/MoodMapping');
@@ -262,7 +232,6 @@ class ApiService {
       ),
     );
     historyRevision.value++;
-    activityRevision.value++;
     return result;
   }
 
@@ -326,7 +295,6 @@ class ApiService {
         'recommendationId': recommendationId,
       },
     );
-    activityRevision.value++;
   }
 
   static Future<Map<String, dynamic>> interactions(int page) async =>
@@ -348,56 +316,5 @@ class ApiService {
         if (comment.trim().isNotEmpty) 'nhanXet': comment.trim(),
       },
     );
-    ratingsRevision.value++;
-    activityRevision.value++;
-  }
-
-  static Future<PagedResult<PersonalRating>> ownRatings(int page) async =>
-      PagedResult<PersonalRating>.fromJson(
-        _object(await request('/History/ratings?page=$page')),
-        PersonalRating.fromJson,
-      );
-
-  static Future<PagedResult<SavedEntry>> savedContents(
-    int page, {
-    String? type,
-  }) async => PagedResult<SavedEntry>.fromJson(
-    _object(
-      await request(
-        '/SavedContent?page=$page${type == null ? '' : '&type=${Uri.encodeQueryComponent(type)}'}',
-      ),
-    ),
-    SavedEntry.fromJson,
-  );
-
-  static Future<bool> isSaved(String id) async {
-    final data = _object(
-      await request('/SavedContent/${Uri.encodeComponent(id)}'),
-    );
-    if (data['saved'] is! bool) {
-      throw const ApiException('Chưa kiểm tra được mục đã lưu. Hãy thử lại.');
-    }
-    return data['saved'] as bool;
-  }
-
-  static Future<void> setSaved(String id, bool saved) async {
-    await request(
-      '/SavedContent/${Uri.encodeComponent(id)}',
-      method: saved ? 'PUT' : 'DELETE',
-    );
-    savedRevision.value++;
-  }
-
-  static Future<WeeklySummary> weeklySummary() async {
-    final data = _object(
-      await request(
-        '/Statistics?days=7&offsetMinutes=${DateTime.now().timeZoneOffset.inMinutes}',
-      ),
-    );
-    try {
-      return WeeklySummary.fromJson(data);
-    } on FormatException {
-      throw const ApiException('Chưa tải được tổng quan của bạn. Hãy thử lại.');
-    }
   }
 }

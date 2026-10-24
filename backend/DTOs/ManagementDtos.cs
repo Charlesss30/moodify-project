@@ -29,9 +29,12 @@ public class ContentMoodDto
 public class RecommendationDto
 {
     [Required, RegularExpression("^(mood|content|hybrid)$")] public string Mode { get; set; } = "mood";
-    [Required, RegularExpression("^(manual|rule_based)$")] public string Source { get; set; } = "manual";
+    [Required, RegularExpression("^(manual|rule_based|ai_va)$")] public string Source { get; set; } = "manual";
+    [RegularExpression("^[A-Za-z0-9][A-Za-z0-9_-]{2,79}$")] public string? ModelVersion { get; set; }
     [StringLength(64)] public string? AnalysisId { get; set; }
     [Range(1, int.MaxValue)] public int TamTrangID { get; set; }
+    [Range(typeof(decimal), "-1", "1")] public decimal? Valence { get; set; }
+    [Range(typeof(decimal), "-1", "1")] public decimal? Arousal { get; set; }
     [RegularExpression("^(Movie|Music)$")] public string? LoaiNoiDung { get; set; }
     [Range(1, 50)] public int Limit { get; set; } = 12;
     public bool Balanced { get; set; }

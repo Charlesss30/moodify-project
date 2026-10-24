@@ -44,7 +44,7 @@ void main() {
         final body = jsonDecode(r.body);
         expect(body['tamTrangID'], 77);
         expect(body['balanced'], true);
-        expect(body['limit'], 8);
+        expect(body['limit'], 6);
         requests++;
         return response({
           'mood': 'Happy',
@@ -75,7 +75,6 @@ void main() {
       );
       await tester.pumpWidget(app());
       await tester.pumpAndSettle();
-      expect(find.text('Một lời nhắn dành cho hôm nay'), findsOneWidget);
       expect(find.byType(AlertDialog), findsOneWidget);
       expect(requests, 0);
       await tester.tap(find.byType(ActionChip));
@@ -88,7 +87,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
       expect(requests, 1);
-      await tester.ensureVisible(find.text('Khám phá chi tiết tâm trạng'));
       await tester.tap(find.text('Khám phá chi tiết tâm trạng'));
       expect(discoveries, 1);
       expect(tester.takeException(), isNull);

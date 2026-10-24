@@ -1,7 +1,5 @@
 # AI Engineer workspace — 08/10/2026
 
-> Cập nhật 16/10/2026: đã bổ sung worker local chạy/dừng training thật, tiến độ/log và đăng ký artifact candidate. Các mô tả chỉ train bên Colab phía dưới là trạng thái cũ. Xem [hướng dẫn mới](PERSONAL_STATS_LOCAL_TRAINING.md).
-
 ## Chức năng đã triển khai
 
 AIEngineer đăng nhập vào cùng website và mặc định mở AI overview. Có 9 mục: AI overview, Model registry, Emotion mapping, Evaluation, Datasets, Training jobs, Feedback analytics, Inference lab, Audit log. Admin cũng truy cập được các mục này; User bị API từ chối. Không cấp AIEngineer quyền CRUD tài khoản/phim/nhạc.

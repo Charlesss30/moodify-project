@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import 'core/app_theme.dart';
-import 'core/navigation.dart';
+import 'core/colors.dart';
 import 'core/api_service.dart';
 import 'models/session_user.dart';
 import 'screens/login_screen.dart';
@@ -20,12 +20,16 @@ class MoodifyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Moodify',
-      navigatorObservers: [appRouteObserver],
       locale: const Locale('vi', 'VN'),
       supportedLocales: const [Locale('vi', 'VN'), Locale('en')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: AppColors.background,
+        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+        useMaterial3: true,
+      ),
       home: const AppFlowCoordinator(),
     );
   }

@@ -53,7 +53,20 @@ builder.Services.AddHttpClient("EmotionInference", client =>
     client.BaseAddress = new Uri(serviceUrl, UriKind.Absolute);
     client.Timeout = TimeSpan.FromSeconds(10);
 });
+builder.Services.AddHttpClient("ValenceArousalInference", client =>
+{
+    var serviceUrl = builder.Configuration["AI:ServiceUrl"] ?? "http://127.0.0.1:8001/";
+    client.BaseAddress = new Uri(serviceUrl, UriKind.Absolute);
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddHttpClient("VietnameseInference", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["AI:InferenceBaseUrl"] ?? "http://127.0.0.1:8001/");
+    client.Timeout = TimeSpan.FromMinutes(4);
+});
 builder.Services.AddSingleton<MoodAnalysisService>();
+builder.Services.AddSingleton<ValenceArousalAnalysisService>();
+builder.Services.AddSingleton<VietnameseEmotionService>();
 builder.Services.AddSingleton<AiModelRegistryService>();
 builder.Services.AddHttpClient("Spotify", client => client.Timeout = TimeSpan.FromSeconds(20))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All });
@@ -77,8 +90,6 @@ builder.Services.AddCors(options =>
 builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(builder.Configuration["Mongo:ConnectionString"] ?? "mongodb://127.0.0.1:27017"));
 builder.Services.AddSingleton<MongoStore>();
 builder.Services.AddSingleton<ExternalCatalog>();
-builder.Services.AddSingleton<LocalTrainingWorker>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<LocalTrainingWorker>());
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();

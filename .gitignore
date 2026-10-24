@@ -1,4 +1,4 @@
-# Backend (.NET)
+﻿# Backend (.NET)
 backend/**/bin/
 backend/**/obj/
 backend/**/.vs/
@@ -67,8 +67,3 @@ docs/AI_ARTIFACT_MANIFEST.json
 docs/AI_AUDIT_REPRO_RESULTS.json
 docs/AI_DATABASE_ALIGNMENT_SNAPSHOT.json
 docs/TMDB_DATA_MIGRATION_RESULTS.json
-
-.local-training/
-
-# Generated browser smoke evidence
-docs/screenshots/

@@ -20,15 +20,12 @@ class _YoutubeView extends StatefulWidget {
   State<_YoutubeView> createState() => _YoutubeViewState();
 }
 
-class _YoutubeViewState extends State<_YoutubeView>
-    with WidgetsBindingObserver {
-  bool _backgrounded = false;
+class _YoutubeViewState extends State<_YoutubeView> {
   late final WebViewController _controller;
   bool _failed = false;
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
@@ -55,7 +52,6 @@ class _YoutubeViewState extends State<_YoutubeView>
   }
 
   Future<void> _load() async {
-    if (mounted && _failed) setState(() => _failed = false);
     try {
       // Application identity as required by YouTube for native WebViews (avoids missing-referrer error 153).
       const appId = String.fromEnvironment(
@@ -72,21 +68,7 @@ class _YoutubeViewState extends State<_YoutubeView>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
-      _backgrounded = true;
-      _controller
-          .loadRequest(Uri.parse('about:blank'))
-          .catchError((Object _) {});
-    } else if (state == AppLifecycleState.resumed && _backgrounded) {
-      _backgrounded = false;
-      _load();
-    }
-  }
-
-  @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _controller.loadRequest(Uri.parse('about:blank')).catchError((Object _) {});
     super.dispose();
   }

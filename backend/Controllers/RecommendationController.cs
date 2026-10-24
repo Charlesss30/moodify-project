@@ -19,10 +19,13 @@ public class RecommendationController(
     public async Task<IActionResult> Recommend(RecommendationDto dto)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        if (dto.Valence.HasValue != dto.Arousal.HasValue
+            || (dto.Source == "ai_va" && (!dto.Valence.HasValue || !dto.Arousal.HasValue || string.IsNullOrWhiteSpace(dto.ModelVersion))))
+            return BadRequest(new { message = "AI VA recommendations require both valence and arousal in the range -1 to 1." });
         var mood=await db.Find<TamTrang>(dto.TamTrangID);
         if(mood==null)return NotFound(new {message="Mood not found."});
         var requestHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-            System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { dto.TamTrangID, dto.LoaiNoiDung, dto.Limit, dto.Balanced, dto.Mode }))));
+            System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { dto.TamTrangID, dto.Valence, dto.Arousal, dto.Source, dto.ModelVersion, dto.LoaiNoiDung, dto.Limit, dto.Balanced, dto.Mode }))));
         var mappingVersion = string.IsNullOrWhiteSpace(dto.AnalysisId) ? null
             : (await analysisService.GetMappingAsync(HttpContext.RequestAborted)).Version;
         var moodConfigurationHash = MoodAnalysisService.MoodConfigurationHash(mood);
@@ -49,7 +52,8 @@ public class RecommendationController(
         if (reservation.CachedResponse is not null) return Ok(reservation.CachedResponse);
         var provenance = reservation.Provenance;
 
-        var v=(mood.MinValence+mood.MaxValence)/2;var a=(mood.MinArousal+mood.MaxArousal)/2;
+        var v=dto.Valence ?? (mood.MinValence+mood.MaxValence)/2;
+        var a=dto.Arousal ?? (mood.MinArousal+mood.MaxArousal)/2;
         var query=db.NoiDungGiaiTris;
         if(dto.LoaiNoiDung=="Movie")query=query.Where(x=>x.LoaiNoiDung=="Movie");
         if(dto.LoaiNoiDung=="Music")query=query.Where(x=>x.LoaiNoiDung=="Song");
@@ -85,8 +89,10 @@ public class RecommendationController(
                 match=MoodScoring.MatchPercent(MoodScoring.DistanceSquared(x.Valence,x.Arousal,v,a))})};
         var responseJson = JsonSerializer.Serialize(response, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var history = new LichSuTamTrang{RecommendationId=recommendationId,TaiKhoanID=userId,TamTrangID=mood.TamTrangID,Valence=v,Arousal=a,ThoiGian=DateTime.UtcNow,
-            Source=provenance?.DecisionSource ?? dto.Source,Algorithm=algorithm,
-            AnalysisId=provenance?.AnalysisId,AnalyzerVersion=provenance?.ModelVersion,
+            Source=provenance?.DecisionSource ?? dto.Source,
+            AnalyzerVersion=dto.Source == "ai_va" ? dto.ModelVersion : provenance?.ModelVersion,
+            Algorithm=algorithm,
+            AnalysisId=provenance?.AnalysisId,
             MappingVersion=provenance?.MappingVersion,AnalysisSource=provenance?.AnalysisSource,
             MoodConfigHash=moodConfigurationHash,AnalysisExpiresAt=provenance?.ExpiresAt,
             RecommendationRequestHash=provenance is null ? null : requestHash,

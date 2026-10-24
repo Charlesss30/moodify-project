@@ -34,7 +34,7 @@ namespace MoodRecommendationAPI.Controllers
         {
             var id = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             return Ok(await _context.TaiKhoans.Where(x => x.TaiKhoanID == id)
-                .Select(x => new { x.TaiKhoanID, x.TenDangNhap, x.Email, x.VaiTro, x.PreferredContentType, x.MoodGoal, x.AvatarDataUrl }).SingleAsync());
+                .Select(x => new { x.TaiKhoanID, x.TenDangNhap, x.Email, x.VaiTro }).SingleAsync());
         }
 
         private CookieOptions HandoffCookie(bool expire = false) => new()
@@ -160,10 +160,7 @@ namespace MoodRecommendationAPI.Controllers
                     user.TaiKhoanID,
                     user.TenDangNhap,
                     user.Email,
-                    user.VaiTro,
-                    user.PreferredContentType,
-                    user.MoodGoal,
-                    user.AvatarDataUrl
+                    user.VaiTro
                 }
             });
         }

@@ -1,7 +1,7 @@
 import { request } from './api.js'
 import { enhanceList } from './list-controls.js'
 
-export const aiTabs = { aiOverview: 'AI overview', models: 'Model registry', aiMapping: 'Emotion mapping', aiEvaluation: 'Evaluation', aiDatasets: 'Datasets', aiTraining: 'Training jobs', aiFeedback: 'Feedback analytics', aiTest: 'Inference lab', aiAudit: 'Audit log' }
+export const aiTabs = { aiOverview: 'AI overview', vaModels: 'English valence/arousal', viModels: 'Vietnamese PhoBERT', models: 'Emotion classifier', aiMapping: 'Emotion mapping', aiEvaluation: 'Evaluation', aiDatasets: 'Datasets', aiTraining: 'Training jobs', aiFeedback: 'Feedback analytics', aiTest: 'Inference lab', aiAudit: 'Audit log' }
 const esc = (v = '') => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 const date = v => new Date(v).toLocaleString('en-US')
 const table = (heads, rows) => `<div class="table-scroll"><table><thead><tr>${heads.map(v => `<th>${esc(v)}</th>`).join('')}</tr></thead><tbody>${rows.join('') || '<tr><td colspan="8">No records yet.</td></tr>'}</tbody></table></div>`
@@ -49,11 +49,85 @@ export async function mountAiWorkspace(host, tab, user, mountModels) {
       }
       return
     }
-    if (tab === 'aiOverview') {
-      const [registry, datasets, jobs, feedback] = await Promise.all([request('/Models'), request('/AiWorkspace/datasets'), request('/AiWorkspace/jobs'), request('/AiWorkspace/feedback')])
+    if (tab === 'vaModels') {
+      const data = await request('/Models/va')
+      const runtime = data.runtime || {}
+      const catalog = data.catalog || {}
+      render(panel('Upload a valence/arousal model', `<p>Create a ZIP or RAR containing one <code>.pt</code> checkpoint and the full <code>tokenizer/</code> folder, including <code>tokenizer.json</code>. The checkpoint may be at the archive root or inside one folder. Maximum package size: 2 GB.</p><form id="va-upload-form"><label class="field">New model version<input name="version" required minlength="3" maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,79}" placeholder="roberta_va_regression_v2"></label><label class="field">Model package (.zip or .rar)<input name="package" type="file" accept=".zip,.rar,application/zip,application/vnd.rar,application/x-rar-compressed" required></label><button class="primary-button" type="submit">Upload and activate</button></form><p>The dashboard stores the candidate, loads it and runs a readiness prediction. If it fails, your active model stays in service. Existing versions are never overwritten.</p>`) + panel('Available model versions', `<p>Uploaded and preinstalled versions appear here. You can reactivate any version in the list.</p>${table(['Version', 'Checkpoint', 'Tokenizer', 'State', 'Action'], (catalog.items || []).map(item => {
+        const version = item.modelVersion ?? item.model_version
+        const tokenizerAvailable = item.tokenizerAvailable ?? item.tokenizer_available
+        const active = version === runtime.modelVersion || version === runtime.model_version
+        return `<tr>${cell(version)}${cell(item.checkpoint)}${cell(tokenizerAvailable ? 'Available' : 'Missing')}${cell(active ? 'Active' : 'Available')}<td>${active ? '<strong>Active</strong>' : button('Activate', `data-va-activate="${esc(version)}"`)}</td></tr>`
+      }))}`))
+      const uploadForm = host.querySelector('#va-upload-form')
+      uploadForm?.addEventListener('submit', async event => {
+        event.preventDefault()
+        if (!uploadForm.reportValidity()) return
+        const submit = uploadForm.querySelector('[type="submit"]')
+        const packageFile = uploadForm.elements.package.files[0]
+        if (packageFile.size > 2 * 1024 * 1024 * 1024) {
+          error(new Error('The ZIP or RAR package must be smaller than 2 GB.'))
+          return
+        }
+        if (!window.confirm(`Upload and activate ${uploadForm.elements.version.value}? This will switch new user analyses to this model.`)) return
+        submit.disabled = true
+        submit.textContent = 'Uploading and loading model…'
+        try {
+          await request('/Models/va/upload-and-activate', { method: 'POST', body: new FormData(uploadForm) })
+          await reload()
+        } catch (e) {
+          error(e)
+          submit.disabled = false
+          submit.textContent = 'Upload and activate'
+        }
+      })
+    } else if (tab === 'viModels') {
+      const data = await request('/Models/vi')
+      const runtime = data.runtime || {}
+      const catalog = data.catalog || {}
+      render(panel('Upload a Vietnamese PhoBERT model', `<p>This is a separate Vietnamese classifier. It requires one PhoBERT sequence-classification bundle with <code>config.json</code>, <code>model.safetensors</code> (or <code>pytorch_model.bin</code>), <code>tokenizer_config.json</code>, <code>vocab.txt</code>, and <code>bpe.codes</code>. ZIP or RAR, maximum 2 GB. If training used custom emoji/teencode dictionaries, include <code>preprocessing.json</code> beside the model files so serving uses the same normalization.</p><form id="vi-upload-form"><label class="field">New Vietnamese model version<input name="version" required minlength="3" maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,79}" placeholder="phobert_vsmec_v2"></label><label class="field">PhoBERT package (.zip or .rar)<input name="package" type="file" accept=".zip,.rar,application/zip,application/vnd.rar,application/x-rar-compressed" required></label><button class="primary-button" type="submit">Upload and activate Vietnamese</button></form><p>Vietnamese candidates are stored and activated independently. Uploading or activating one never replaces the English model.</p>`) + panel('Vietnamese model runtime', `<p>Status: <strong>${esc(runtime.status || 'unavailable')}</strong> · Active version: <strong>${esc(runtime.modelVersion || 'None')}</strong> · Device: ${esc(runtime.inferenceDevice || '—')} · Language: vi</p>`) + panel('Available Vietnamese versions', `<p>Only Vietnamese PhoBERT candidates appear in this list.</p>${table(['Version', 'Checkpoint', 'Tokenizer', 'State', 'Action'], (catalog.items || []).map(item => {
+        const version = item.modelVersion ?? item.model_version
+        const active = version === runtime.modelVersion || version === catalog.activeVersion
+        return `<tr>${cell(version)}${cell(item.checkpoint)}${cell((item.tokenizerAvailable ?? item.tokenizer_available) ? 'Available' : 'Missing')}${cell(active ? 'Active' : 'Available')}<td>${active ? '<strong>Active</strong>' : button('Activate', `data-vi-activate="${esc(version)}"`)}</td></tr>`
+      }))}`))
+      const uploadForm = host.querySelector('#vi-upload-form')
+      uploadForm?.addEventListener('submit', async event => {
+        event.preventDefault()
+        if (!uploadForm.reportValidity()) return
+        const submit = uploadForm.querySelector('[type="submit"]')
+        const packageFile = uploadForm.elements.package.files[0]
+        if (packageFile.size > 2 * 1024 * 1024 * 1024) { error(new Error('Vietnamese model package must be smaller than 2 GB.')); return }
+        const version = uploadForm.elements.version.value
+        if (!window.confirm(`Upload and activate Vietnamese model ${version}? The English model will stay unchanged.`)) return
+        submit.disabled = true
+        submit.textContent = 'Uploading and loading PhoBERT…'
+        try {
+          await request('/Models/vi/upload-and-activate', { method: 'POST', body: new FormData(uploadForm) })
+          await reload()
+        } catch (e) {
+          error(e)
+          submit.disabled = false
+          submit.textContent = 'Upload and activate Vietnamese'
+        }
+      })
+      on('[data-vi-activate]', async b => {
+        const version = b.dataset.viActivate
+        if (!window.confirm(`Activate Vietnamese model ${version}? The English model will stay unchanged.`)) return
+        await request('/Models/vi/activate', { method: 'POST', body: JSON.stringify({ version }) })
+        await reload()
+      })
+      on('[data-va-activate]', async b => {
+        const version = b.dataset.vaActivate
+        if (!window.confirm(`Load and activate ${version}? New user analyses will use it.`)) return
+        await request('/Models/va/activate', { method: 'POST', body: JSON.stringify({ version }) })
+        await reload()
+      })
+    } else if (tab === 'aiOverview') {
+      const [registry, datasets, jobs, feedback, vaState] = await Promise.all([request('/Models'), request('/AiWorkspace/datasets'), request('/AiWorkspace/jobs'), request('/AiWorkspace/feedback'), request('/Models/va')])
       const r = registry.runtime || {}
-      const stats = [['Runtime', r.runtimeStatus || 'Unavailable'], ['Active model', registry.activeVersion || 'None'], ['Datasets (latest 200)', datasets.items.length], ['Jobs (latest 200)', jobs.length], ['Submitted results', jobs.filter(j => j.report).length], ['Ratings (latest 20,000)', feedback.count]]
-      render(`<p>Hello, ${esc(user.tenDangNhap || 'AI engineer')}. Manage data, experiments and model delivery.</p><div class="stats-grid">${stats.map(([label, value]) => `<div class="stat-card"><div class="stat-copy"><span>${esc(label)}</span><strong>${esc(value)}</strong></div></div>`).join('')}</div>` + panel('Runtime and workflow', `<p>Device: ${esc(r.deviceName || '—')} · Enabled: ${esc(r.enabled)} · Language: ${esc(r.language || 'en')}</p><ol><li>Review labeled datasets and independent splits.</li><li>Prepare a training job and download its configured Colab notebook.</li><li>Run explicitly on a training machine or Colab; import the result.</li><li>Review evaluation, then validate and activate an allowlisted candidate in Model registry.</li></ol><p>Choose local training in Training jobs to launch a managed process, or download the Colab notebook for external training. Serving weights remain separate.</p>`))
+      const va = vaState.runtime || {}
+      const stats = [['VA model runtime', va.status || 'Unavailable'], ['Active VA model', va.modelVersion || 'None'], ['Classifier runtime', r.runtimeStatus || 'Unavailable'], ['Active classifier', registry.activeVersion || 'None'], ['Datasets (latest 200)', datasets.items.length], ['Jobs (latest 200)', jobs.length], ['Submitted results', jobs.filter(j => j.report).length], ['Ratings (latest 20,000)', feedback.count]]
+      render(`<p>Hello, ${esc(user.tenDangNhap || 'AI engineer')}. Manage data, experiments and model delivery.</p><div class="stats-grid">${stats.map(([label, value]) => `<div class="stat-card"><div class="stat-copy"><span>${esc(label)}</span><strong>${esc(value)}</strong></div></div>`).join('')}</div>` + panel('Valence/arousal model', `<p>Active version: ${esc(va.modelVersion || '—')} · Runtime: ${esc(va.status || 'unavailable')} · Device: ${esc(va.inferenceDevice || '—')}</p><p>Change the model used by Mood Analysis in Valence/arousal models.</p>`) + panel('Emotion classifier workflow', `<p>Device: ${esc(r.deviceName || '—')} · Enabled: ${esc(r.enabled)} · Language: ${esc(r.language || 'en')}</p><ol><li>Review labeled datasets and independent splits.</li><li>Prepare a training job and download its configured Colab notebook.</li><li>Run explicitly on a training machine or Colab; import the result.</li><li>Review evaluation, then validate and activate an allowlisted candidate in Emotion classifier.</li></ol><p>Training runs externally. Marking a job as running does not launch a process.</p>`))
     } else if (tab === 'aiDatasets') {
       const d = await request('/AiWorkspace/datasets')
       render(panel('Register an immutable English emotion dataset', `<p>JSON array: text, labels, split (train / validation / test). Maximum 60,000 reviewed samples / 32 MB upload (15 MB stored). Training requires at least 400 validation samples for selection/calibration. Duplicate text across splits is rejected. Do not include personal identifiers.</p><details><summary>Accepted labels</summary><p>${esc(d.labels.join(', '))}</p></details><form id="dataset-create"><label class="field">Dataset name<input name="name" required minlength="2" maxlength="100"></label><label class="field">Source and labeling method<input name="source" required minlength="3" maxlength="300"></label><label class="field">Samples JSON<input name="file" type="file" accept=".json,application/json" required></label><div class="ai-actions"><button class="primary-button" type="submit">Register dataset</button>${button('Download format example', 'data-example')}</div></form><p>The three-row example documents the format only; it is not a quality training dataset.</p>`) + panel('Dataset versions (latest 200)', table(['Name', 'Source', 'Samples', 'Split counts', 'Created', 'Actions'], d.items.map(x => `<tr data-updated="${esc(x.createdAt)}">${cell(x.name)}${cell(x.source)}${cell(x.count)}${cell(JSON.stringify(x.splits))}${cell(date(x.createdAt))}<td>${button('Export JSON', `data-dataset="${esc(x.id)}"`)}</td></tr>`))))
@@ -63,30 +137,7 @@ export async function mountAiWorkspace(host, tab, user, mountModels) {
       enhanceList(host.querySelectorAll('section.panel')[1], { dateAvailable: true })
     } else if (tab === 'aiTraining') {
       const [datasets, jobs] = await Promise.all([request('/AiWorkspace/datasets'), request('/AiWorkspace/jobs')])
-      render(panel('Prepare training job', `<p>Creates an experiment. Then choose Start local training below, or download its Colab notebook. Preparing alone does not launch training.</p><form id="job-create"><div class="form-row"><label class="field">Dataset<select name="datasetId" required><option value="">Select dataset</option>${datasets.items.map(d => `<option value="${esc(d.id)}">${esc(d.name)} (${d.count})</option>`).join('')}</select></label><label class="field">New model version<input name="modelVersion" required pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{2,79}" placeholder="roberta_experiment_02"></label></div><div class="form-row"><label class="field">Epochs<input name="epochs" type="number" min="1" max="10" value="6" required></label><label class="field">Batch size<input name="batchSize" type="number" min="1" max="8" value="2" required></label><label class="field">Learning rate<input name="learningRate" type="number" min="0.000001" max="0.0001" step="0.000001" value="0.00001" required></label><label class="field">Gradient accumulation<input name="gradientAccumulation" type="number" min="1" max="64" value="16" required></label><label class="field">Seed<input name="seed" type="number" min="0" max="2147483647" value="42" required></label></div><button class="primary-button" type="submit">Prepare job</button></form>`) + panel('Run in Google Colab', '<p>Download the job notebook and open it in Colab with a GPU runtime. It uses your original RoBERTa-large ASL notebook, including selection/calibration splits, tuned thresholds and independent test evaluation.</p><p>Run cells in order. The final cell downloads workspace_report.json to import below. Google Drive stores each job in its own workspace-jobs folder. Colab training runs outside this API server.</p><p>Cancel record for external jobs closes the dashboard record only. Stop the actual run in Colab. Existing deployment weights are never overwritten.</p>') + panel('Training jobs (latest 200)', table(['Version', 'Status', 'Dataset', 'Created', 'Actions'], jobs.map(j => `<tr data-updated="${esc(j.createdAt)}">${cell(j.modelVersion)}${cell(j.status)}${cell(datasets.items.find(d => d.id === j.datasetId)?.name || j.datasetId)}${cell(date(j.createdAt))}<td><div class="ai-actions">${button('Colab notebook', `data-notebook="${esc(j.id)}"`)}${button('Bundle', `data-bundle="${esc(j.id)}"`)}${button('Details', `data-details="${esc(j.id)}"`)}${j.status === 'prepared' ? button('Start local training', `data-local-start="${esc(j.id)}"`) : ''}${j.execution === 'local' ? button('Progress / logs', `data-progress="${esc(j.id)}"`) : ''}${j.execution === 'local' && ['queued', 'running'].includes(j.status) ? button('Stop training process', `data-local-cancel="${esc(j.id)}"`) : ''}${j.artifactVerified && j.status === 'completed' ? button('Artifact manifest', `data-artifact="${esc(j.id)}"`) : ''}${j.execution !== 'local' && ['prepared', 'running'].includes(j.status) ? `${j.status === 'prepared' ? button('Mark running', `data-state="running" data-job="${esc(j.id)}"`) : ''}${button('Import result', `data-report="${esc(j.id)}"`)}${button('Mark failed', `data-state="failed" data-job="${esc(j.id)}"`)}${button('Cancel record', `data-state="cancelled" data-job="${esc(j.id)}"`)}` : ''}</div></td></tr>`))) + '<div id="job-detail"></div><input id="result-file" type="file" accept=".json,application/json" hidden>')
-      const worker = await request('/AiWorkspace/worker')
-      const local = document.createElement('section')
-      local.className = 'panel'
-      local.innerHTML = '<h2>Local training worker</h2><p>Fine-tunes the installed model with ASL. Uses CPU by default and separate output per job. This is continued fine-tuning, not an independent pretrained-baseline benchmark. Completion verifies local files; it does not activate the model.</p>' + `<p>Ready: ${esc(worker.ready)} · Configured: ${esc(worker.configured)} · Device: ${esc(worker.device)}</p>` + '<div data-local-progress aria-live="polite"></div>'
-      host.querySelector('#job-detail').before(local)
-      on('[data-local-start]', async b => { const j = jobs.find(x => x.id === b.dataset.localStart); await post(`jobs/${j.id}/start`, { revision: j.revision }); await reload() })
-      on('[data-local-cancel]', async b => { const j = jobs.find(x => x.id === b.dataset.localCancel); await post(`jobs/${j.id}/cancel`, { revision: j.revision }); await reload() })
-      on('[data-artifact]', async b => download(`artifact-${b.dataset.artifact}.json`, await request(`/AiWorkspace/jobs/${b.dataset.artifact}/artifact`)))
-      on('[data-progress]', async b => {
-        const target = local.querySelector('[data-local-progress]')
-        target.dataset.job = b.dataset.progress
-        const poll = async () => {
-          if (!local.isConnected || target.dataset.job !== b.dataset.progress) return
-          try {
-            const d = await request(`/AiWorkspace/jobs/${b.dataset.progress}/progress`)
-            if (!local.isConnected || target.dataset.job !== b.dataset.progress) return
-            target.innerHTML = `<h3>${esc(d.job.modelVersion)} · ${esc(d.job.status)}</h3><p>${esc(d.job.failure || '')}</p><pre>${esc(JSON.stringify(d.progress, null, 2))}</pre><pre style="max-height:300px;overflow:auto">${esc(d.log.join('\n'))}</pre><p>Refresh the list after completion to access the artifact.</p>`
-            if (['queued', 'running', 'cancelling'].includes(d.job.status)) setTimeout(poll, 2000)
-          } catch (e) { if (local.isConnected) target.textContent = e.message }
-        }
-        await poll()
-      })
-      if (!worker.ready || !worker.configured) host.querySelectorAll('[data-local-start]').forEach(b => { b.disabled = true })
+      render(panel('Prepare external training', `<p>Creates a persisted experiment and downloadable configuration. No GPU process starts on the API server.</p><form id="job-create"><div class="form-row"><label class="field">Dataset<select name="datasetId" required><option value="">Select dataset</option>${datasets.items.map(d => `<option value="${esc(d.id)}">${esc(d.name)} (${d.count})</option>`).join('')}</select></label><label class="field">New model version<input name="modelVersion" required pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{2,79}" placeholder="roberta_experiment_02"></label></div><div class="form-row"><label class="field">Epochs<input name="epochs" type="number" min="1" max="10" value="6" required></label><label class="field">Batch size<input name="batchSize" type="number" min="1" max="8" value="2" required></label><label class="field">Learning rate<input name="learningRate" type="number" min="0.000001" max="0.0001" step="0.000001" value="0.00001" required></label><label class="field">Gradient accumulation<input name="gradientAccumulation" type="number" min="1" max="64" value="16" required></label><label class="field">Seed<input name="seed" type="number" min="0" max="2147483647" value="42" required></label></div><button class="primary-button" type="submit">Prepare job</button></form>`) + panel('Run in Google Colab', '<p>Download the job notebook and open it in Colab with a GPU runtime. It uses your original RoBERTa-large ASL notebook, including selection/calibration splits, tuned thresholds and independent test evaluation.</p><p>Run cells in order. The final cell downloads workspace_report.json to import below. Google Drive stores each job in its own workspace-jobs folder. No training runs on this API server.</p><p>Cancel below closes the dashboard record only. Stop the actual run in Colab. Existing deployment weights are never overwritten.</p>') + panel('Training jobs (latest 200)', table(['Version', 'Status', 'Dataset', 'Created', 'Actions'], jobs.map(j => `<tr data-updated="${esc(j.createdAt)}">${cell(j.modelVersion)}${cell(j.status)}${cell(datasets.items.find(d => d.id === j.datasetId)?.name || j.datasetId)}${cell(date(j.createdAt))}<td><div class="ai-actions">${button('Colab notebook', `data-notebook="${esc(j.id)}"`)}${button('Bundle', `data-bundle="${esc(j.id)}"`)}${button('Details', `data-details="${esc(j.id)}"`)}${['prepared', 'running'].includes(j.status) ? `${j.status === 'prepared' ? button('Mark running', `data-state="running" data-job="${esc(j.id)}"`) : ''}${button('Import result', `data-report="${esc(j.id)}"`)}${button('Mark failed', `data-state="failed" data-job="${esc(j.id)}"`)}${button('Cancel record', `data-state="cancelled" data-job="${esc(j.id)}"`)}` : ''}</div></td></tr>`))) + '<div id="job-detail"></div><input id="result-file" type="file" accept=".json,application/json" hidden>')
       form('#job-create', async values => { for (const k of ['epochs', 'batchSize', 'gradientAccumulation', 'learningRate', 'seed']) values[k] = Number(values[k]); await post('jobs', values); await reload() })
       on('[data-notebook]', async b => download(`training-${b.dataset.notebook}.ipynb`, await request(`/AiWorkspace/jobs/${b.dataset.notebook}/notebook`)))
       on('[data-bundle]', async b => download(`job-${b.dataset.bundle}.json`, await request(`/AiWorkspace/jobs/${b.dataset.bundle}/bundle`)))

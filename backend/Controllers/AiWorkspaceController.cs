@@ -15,7 +15,7 @@ using mood_recommendation.Data;
 namespace mood_recommendation.Controllers;
 
 [ApiController, Route("api/AiWorkspace"), Authorize(Roles = "AIEngineer")]
-public class AiWorkspaceController(MongoStore db, IWebHostEnvironment env, mood_recommendation.Services.LocalTrainingWorker worker) : ControllerBase
+public class AiWorkspaceController(MongoStore db, IWebHostEnvironment env) : ControllerBase
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private IMongoCollection<AiDataset> Datasets => db.Database.GetCollection<AiDataset>("aiDatasets");
@@ -28,25 +28,6 @@ public class AiWorkspaceController(MongoStore db, IWebHostEnvironment env, mood_
     private static object Summary(AiDataset d) => new { d.Id, d.Name, d.Source, d.Hash, d.CreatedAt, d.ActorId,
         count = d.Rows.Count, splits = d.Rows.GroupBy(x => x.Split).ToDictionary(x => x.Key, x => x.Count()),
         labels = d.Rows.SelectMany(x => x.Labels).Distinct().Order().ToArray() };
-
-    [HttpGet("jobs/{id}/artifact")]
-    public async Task<IActionResult> LocalArtifact(string id, CancellationToken ct) {
-        var result=await worker.Artifact(id,ct);return result is null?NotFound():Ok(result);
-    }
-    [HttpGet("worker")]
-    public IActionResult Worker() => Ok(worker.Availability());
-    [HttpPost("jobs/{id}/start")]
-    public async Task<IActionResult> StartLocal(string id, LocalJobInput input, CancellationToken ct) {
-        var result = await worker.Start(id, input.Revision, Actor, ct); return StatusCode(result.StatusCode, result.Body);
-    }
-    [HttpPost("jobs/{id}/cancel")]
-    public async Task<IActionResult> CancelLocal(string id, LocalJobInput input, CancellationToken ct) {
-        var result = await worker.Cancel(id, input.Revision, Actor, ct); return StatusCode(result.StatusCode, result.Body);
-    }
-    [HttpGet("jobs/{id}/progress")]
-    public async Task<IActionResult> LocalProgress(string id, CancellationToken ct) {
-        var result = await worker.Progress(id, ct); return result is null ? NotFound() : Ok(result);
-    }
 
     [HttpGet("datasets")]
     public async Task<IActionResult> ListDatasets(CancellationToken ct) => Ok(new {
@@ -207,7 +188,7 @@ print('Import workspace_report.json in AI workspace. Artifact still requires ser
     {
         var job = await Jobs.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
         if (job is null) return NotFound();
-        if (job.Execution == "local" || job.Revision != input.Revision || job.Status is "reported" or "cancelled" or "failed" ||
+        if (job.Revision != input.Revision || job.Status is "reported" or "cancelled" or "failed" ||
             input.State is not ("running" or "cancelled" or "failed") || input.State == job.Status)
             return Conflict(new { message = "Job changed or transition not allowed. Refresh the list." });
         job.Status = input.State;
@@ -219,7 +200,7 @@ print('Import workspace_report.json in AI workspace. Artifact still requires ser
     {
         var job = await Jobs.Find(x => x.Id == id).FirstOrDefaultAsync(ct);
         if (job is null) return NotFound();
-        if (job.Execution == "local" || job.Status is not ("prepared" or "running") || job.Revision != input.Revision)
+        if (job.Status is not ("prepared" or "running") || job.Revision != input.Revision)
             return Conflict(new { message = "Job is no longer accepting reports. Refresh the list." });
         if (input.JobId != job.Id || input.ModelVersion != job.ModelVersion || input.DatasetHash != job.DatasetHash || input.ConfigHash != job.ConfigHash)
             return BadRequest(new { message = "Report provenance does not match this job/dataset/configuration." });
@@ -297,12 +278,6 @@ public sealed class JobInput
 }
 public sealed class AiTrainingJob
 {
-    public int? WorkerPid { get; set; }
-    public string? WorkerHash { get; set; }
-    public string? BaseArtifactHash { get; set; }
-    public string Execution { get; set; } = "external";
-    public bool ArtifactVerified { get; set; }
-    public string? Failure { get; set; }
     [BsonId] public string Id { get; set; } = "";
     public string DatasetId { get; set; } = "";
     public string DatasetHash { get; set; } = "";
@@ -334,5 +309,3 @@ public sealed class TrainingReport
     [Required, Range(0, 1)] public double? MacroF1 { get; set; }
     [Required, Range(1, 60000)] public int? TestSamples { get; set; }
 }
-
-public sealed class LocalJobInput { public int Revision { get; set; } }

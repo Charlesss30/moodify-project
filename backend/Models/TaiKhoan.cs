@@ -10,9 +10,6 @@ namespace mood_recommendation.Models
     public class TaiKhoan
     {
         [BsonElement("updatedAt")] public DateTime? UpdatedAt { get; set; }
-        [BsonElement("preferredContentType")] public string PreferredContentType { get; set; } = "Both";
-        [BsonElement("moodGoal")] public string MoodGoal { get; set; } = "balance";
-        [BsonElement("avatarDataUrl")] public string? AvatarDataUrl { get; set; }
         [BsonExtraElements, System.Text.Json.Serialization.JsonIgnore]
         public BsonDocument ExtraElements { get; set; } = new();
 

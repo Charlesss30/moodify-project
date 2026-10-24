@@ -63,7 +63,7 @@ Sau đó cấu hình backend dùng `moodify_received`. Không thêm `--drop` khi
 ## 4. Kiểm tra sau khôi phục
 
 1. Đọc tổng kết: số document đã restore phải phù hợp với bản nhận và số failed bằng 0. Nếu `0 restored` toàn bộ, kiểm tra cấu trúc giải nén, đường dẫn và bộ lọc namespace.
-2. Refresh Compass, mở đúng database đích. Đối với bản đang chia sẻ có 16 collection, gồm accounts, contents, movies, music, genres, moods, ratings, moodHistory, interactions và các collection AI/counters. Một collection có thể hợp lệ dù không có document. Backend mới bổ sung `savedContents` cho danh sách phim/nhạc đã lưu theo tài khoản. Bản backup cũ chưa có collection này sẽ được backend tạo rỗng khi khởi động; muốn chuyển cả danh sách đã lưu thì tạo bản dump mới sau khi sử dụng chức năng.
+2. Refresh Compass, mở đúng database đích. Đối với bản đang chia sẻ có 16 collection, gồm accounts, contents, movies, music, genres, moods, ratings, moodHistory, interactions và các collection AI/counters. Một collection có thể hợp lệ dù không có document.
 3. Kiểm tra vài tên phim/bài hát, vùng mood và index; không chỉ dựa vào việc thấy tên database.
 
 Số document phụ thuộc thời điểm xuất. Con số 369 trong hướng dẫn backup cũ là của bản JSON ngày 09/10/2026, không phải số đã xác minh cho bản BSON này.
