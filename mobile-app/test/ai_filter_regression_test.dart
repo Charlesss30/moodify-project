@@ -34,33 +34,15 @@ void main() {
               'maxArousal': 1,
             },
           ];
-        } else if (r.url.path.endsWith('/MoodAnalysis')) {
+        } else if (r.url.path.endsWith('/MoodAnalysis/valence-arousal')) {
           data = {
-            'analysisId': 'first-analysis',
             'status': 'matched',
-            'source': 'ai',
             'language': 'en',
-            'modelVersion': 'test-v1',
-            'mappingVersion': 'map-v1',
-            'suggestedMoodId': 5,
-            'requiresConfirmation': true,
-            'scoreType': 'uncalibrated_sigmoid_not_accuracy',
-            'candidates': [
-              {
-                'label': 'joy',
-                'score': 0.99,
-                'moodId': 5,
-                'decisionEligible': true,
-              },
-            ],
-            'decisionCandidates': [
-              {
-                'label': 'joy',
-                'score': 0.99,
-                'moodId': 5,
-                'decisionEligible': true,
-              },
-            ],
+            'modelVersion': 'roberta_va_test',
+            'valence': 0.73,
+            'arousal': 0.24,
+            'mood': {'tamTrangID': 5, 'tenTamTrang': 'Happy'},
+            'moodCandidates': [],
           };
         } else {
           requests.add(jsonDecode(r.body) as Map<String, dynamic>);
@@ -83,7 +65,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Xác nhận và nhận gợi ý'));
       await tester.pumpAndSettle();
-      expect(requests.single['analysisId'], 'first-analysis');
+      expect(requests.single['analysisId'], isNull);
+      expect(requests.single['source'], 'ai_va');
+      expect(requests.single['modelVersion'], 'roberta_va_test');
+      expect(requests.single['valence'], 0.73);
+      expect(requests.single['arousal'], 0.24);
       await tester.tap(find.text('Nhạc'));
       await tester.pumpAndSettle();
       expect(find.textContaining('Đã đổi loại nội dung'), findsOneWidget);
@@ -93,11 +79,14 @@ void main() {
       expect(button.onPressed, isNull);
       await tester.tap(find.byType(DropdownButtonFormField<int>));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Happy').last);
+      await tester.tap(find.text('😊  Vui vẻ').last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Xác nhận và nhận gợi ý'));
       await tester.pumpAndSettle();
       expect(requests.last['analysisId'], isNull);
+      expect(requests.last['source'], 'manual');
+      expect(requests.last.containsKey('modelVersion'), isFalse);
+      expect(requests.last.containsKey('valence'), isFalse);
       expect(requests.last['loaiNoiDung'], 'Music');
       expect(tester.takeException(), isNull);
     },

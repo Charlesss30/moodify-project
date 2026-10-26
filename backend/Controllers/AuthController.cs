@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver.Linq;
 using MongoDB.Driver;
 using mood_recommendation.Data;
@@ -33,8 +33,9 @@ namespace MoodRecommendationAPI.Controllers
         public async Task<IActionResult> Me()
         {
             var id = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            return Ok(await _context.TaiKhoans.Where(x => x.TaiKhoanID == id)
-                .Select(x => new { x.TaiKhoanID, x.TenDangNhap, x.Email, x.VaiTro }).SingleAsync());
+            var user=await _context.TaiKhoans.SingleAsync(x=>x.TaiKhoanID==id);
+            return Ok(new {user.TaiKhoanID,user.TenDangNhap,user.Email,user.VaiTro,
+                user.HasPassword,user.PreferredContentType,user.MoodGoal,user.AvatarDataUrl});
         }
 
         private CookieOptions HandoffCookie(bool expire = false) => new()
@@ -160,7 +161,11 @@ namespace MoodRecommendationAPI.Controllers
                     user.TaiKhoanID,
                     user.TenDangNhap,
                     user.Email,
-                    user.VaiTro
+                    user.VaiTro,
+                    user.HasPassword,
+                    user.PreferredContentType,
+                    user.MoodGoal,
+                    user.AvatarDataUrl
                 }
             });
         }

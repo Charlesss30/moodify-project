@@ -39,6 +39,10 @@ namespace mood_recommendation.Models
 
         [BsonElement("director"), MaxLength(500)] public string? Director { get; set; }
 
+        [BsonElement("releaseYear")] public int? ReleaseYear { get; set; }
+        [BsonElement("runtimeMinutes")] public int? RuntimeMinutes { get; set; }
+        [BsonElement("cast")] public string[] Cast { get; set; } = [];
+
         [BsonElement("trailerUrl")] public string? TrailerUrl { get; set; }
 
         [BsonElement("ratingSource")] public string? RatingSource { get; set; }

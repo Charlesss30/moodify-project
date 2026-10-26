@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using System.ComponentModel.DataAnnotations;
@@ -10,6 +11,12 @@ namespace mood_recommendation.Models
     public class TaiKhoan
     {
         [BsonElement("updatedAt")] public DateTime? UpdatedAt { get; set; }
+        [BsonElement("preferredContentType")] public string PreferredContentType { get; set; } = "Both";
+        [BsonElement("moodGoal")] public string MoodGoal { get; set; } = "balance";
+        [BsonElement("avatarDataUrl")] public string? AvatarDataUrl { get; set; }
+        [BsonElement("googleUid"), BsonIgnoreIfNull, JsonIgnore] public string? GoogleUid { get; set; }
+        [BsonElement("hasPassword")] public bool HasPassword { get; set; } = true;
+        [BsonElement("sessionVersion"), JsonIgnore] public long SessionVersion { get; set; }
         [BsonExtraElements, System.Text.Json.Serialization.JsonIgnore]
         public BsonDocument ExtraElements { get; set; } = new();
 

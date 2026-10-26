@@ -40,6 +40,8 @@ class MoodAnalysisResult {
     this.mappingVersion,
     this.candidates = const [],
     this.decisionCandidates = const [],
+    this.language,
+    this.usesVaModel = false,
   });
 
   final MoodAnalysisStatus status;
@@ -56,6 +58,8 @@ class MoodAnalysisResult {
   final String? mappingVersion;
   final List<MoodAnalysisCandidate> candidates;
   final List<MoodAnalysisCandidate> decisionCandidates;
+  final String? language;
+  final bool usesVaModel;
 
   MoodAnalysisResult withMood(Mood mood) => MoodAnalysisResult(
     status: MoodAnalysisStatus.matched,
@@ -71,23 +75,135 @@ class MoodAnalysisResult {
     mappingVersion: mappingVersion,
     candidates: candidates,
     decisionCandidates: decisionCandidates,
+    language: language,
+    usesVaModel: usesVaModel,
   );
 
   MoodAnalysisResult withMappedMood(Mood mood) => MoodAnalysisResult(
     status: status,
     moodId: mood.id,
     label: mood.name,
-    valence: mood.valence,
-    arousal: mood.arousal,
+    valence: valence ?? mood.valence,
+    arousal: arousal ?? mood.arousal,
     source: source,
     analyzerVersion: analyzerVersion,
     needsConfirmation: true,
     reason: reason,
+    confidence: confidence,
     analysisId: analysisId,
     mappingVersion: mappingVersion,
     candidates: candidates,
     decisionCandidates: decisionCandidates,
+    language: language,
+    usesVaModel: usesVaModel,
   );
+
+  /// Response from the deployed PhoBERT / RoBERTa VA gateway.
+  factory MoodAnalysisResult.fromVaApi(
+    Map<String, dynamic> json, {
+    required String expectedLanguage,
+  }) {
+    Never invalid() =>
+        throw const FormatException('Kết quả model song ngữ không hợp lệ.');
+    double coordinate(Object? value) {
+      if (value is! num || !value.isFinite || value < -1 || value > 1) {
+        invalid();
+      }
+      return value.toDouble();
+    }
+
+    final language = json['language'];
+    final version = json['modelVersion'];
+    final mood = json['mood'];
+    if ((expectedLanguage != 'vi' && expectedLanguage != 'en') ||
+        language != expectedLanguage ||
+        json['status'] != 'matched' ||
+        version is! String ||
+        !RegExp(r'^[A-Za-z0-9][A-Za-z0-9_-]{2,79}$').hasMatch(version) ||
+        mood is! Map) {
+      invalid();
+    }
+    final moodData = Map<String, dynamic>.from(mood);
+    final moodId = moodData['tamTrangID'];
+    final moodName = moodData['tenTamTrang'];
+    if (moodId is! int ||
+        moodId <= 0 ||
+        moodName is! String ||
+        moodName.trim().isEmpty) {
+      invalid();
+    }
+    final valence = coordinate(json['valence']);
+    final arousal = coordinate(json['arousal']);
+    double? confidence;
+    var accepted = true;
+    final candidates = <MoodAnalysisCandidate>[];
+    if (language == 'vi') {
+      const labels = {
+        'Anger',
+        'Disgust',
+        'Enjoyment',
+        'Fear',
+        'Other',
+        'Sadness',
+        'Surprise',
+      };
+      final rawConfidence = json['confidence'];
+      final rawAccepted = json['accepted'];
+      final rawCandidates = json['emotionCandidates'];
+      if (!labels.contains(json['emotion']) ||
+          rawConfidence is! num ||
+          !rawConfidence.isFinite ||
+          rawConfidence < 0 ||
+          rawConfidence > 1 ||
+          rawAccepted is! bool ||
+          rawCandidates is! List ||
+          rawCandidates.isEmpty ||
+          rawCandidates.length > 3) {
+        invalid();
+      }
+      confidence = rawConfidence.toDouble();
+      accepted = rawAccepted;
+      for (final candidate in rawCandidates) {
+        if (candidate is! Map) invalid();
+        final label = candidate['label'];
+        final score = candidate['score'];
+        if (label is! String ||
+            !labels.contains(label) ||
+            score is! num ||
+            !score.isFinite ||
+            score < 0 ||
+            score > 1) {
+          invalid();
+        }
+        candidates.add(
+          MoodAnalysisCandidate(label: label, score: score.toDouble()),
+        );
+      }
+      if (candidates.map((item) => item.label).toSet().length !=
+          candidates.length) {
+        invalid();
+      }
+    }
+    return MoodAnalysisResult(
+      status: accepted
+          ? MoodAnalysisStatus.matched
+          : MoodAnalysisStatus.unknown,
+      moodId: accepted ? moodId : null,
+      label: accepted ? moodName : 'Chưa đủ tin cậy',
+      source: MoodAnalysisSource.ai,
+      analyzerVersion: version,
+      language: language,
+      usesVaModel: true,
+      valence: valence,
+      arousal: arousal,
+      confidence: confidence,
+      needsConfirmation: true,
+      reason: accepted
+          ? 'Đây là tâm trạng được gợi ý. Bạn có thể xác nhận hoặc chọn lại.'
+          : 'Mô tả chưa đạt ngưỡng tin cậy. Hãy diễn đạt rõ hơn hoặc chọn tâm trạng bên dưới.',
+      candidates: List.unmodifiable(candidates),
+    );
+  }
 
   factory MoodAnalysisResult.fromApi(Map<String, dynamic> json) {
     if (json['source'] != 'ai' ||

@@ -315,6 +315,30 @@
             "string",
             "null"
           ]
+        },
+        "releaseYear": {
+          "bsonType": [
+            "int",
+            "null"
+          ],
+          "minimum": 1800,
+          "maximum": 2100
+        },
+        "runtimeMinutes": {
+          "bsonType": [
+            "int",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "cast": {
+          "bsonType": "array",
+          "maxItems": 30,
+          "items": {
+            "bsonType": "string",
+            "maxLength": 120
+          }
         }
       }
     }
@@ -706,6 +730,22 @@
         },
         "usernameNormalized": {
           "bsonType": "string"
+        },
+        "googleUid": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "hasPassword": {
+          "bsonType": "bool"
+        },
+        "sessionVersion": {
+          "bsonType": [
+            "int",
+            "long"
+          ],
+          "minimum": 0
         }
       }
     }

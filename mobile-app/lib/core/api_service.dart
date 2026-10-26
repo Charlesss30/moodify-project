@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/mobile_models.dart';
+import '../models/personal_models.dart';
 import '../models/session_user.dart';
 import '../services/mood_analysis/mood_analyzer.dart';
 
@@ -22,12 +23,18 @@ class ApiService {
   static String? _token;
   static int _sessionVersion = 0;
   static final historyRevision = ValueNotifier<int>(0);
+  static final activityRevision = ValueNotifier<int>(0);
+  static final ratingsRevision = ValueNotifier<int>(0);
+  static final savedRevision = ValueNotifier<int>(0);
   @visibleForTesting
   static http.Client Function() clientFactory = http.Client.new;
   @visibleForTesting
   static Duration requestTimeout = const Duration(seconds: 20);
   static bool _sessionExpired = false;
   static VoidCallback? onUnauthorized;
+
+  static bool get isAuthenticated => _token != null;
+  static int get sessionRevision => _sessionVersion;
 
   static void logout() {
     _token = null;
@@ -65,7 +72,7 @@ class ApiService {
     final hadSession = authenticated && _token != null;
     request.headers['Accept'] = 'application/json';
     if (body != null) {
-      request.headers['Content-Type'] = 'application/json';
+      request.headers['Content-Type'] = 'application/json; charset=utf-8';
       request.body = jsonEncode(body);
     }
     if (authenticated && _token != null) {
@@ -122,7 +129,9 @@ class ApiService {
     } on TimeoutException {
       throw const ApiException('Máy chủ phản hồi quá lâu. Hãy thử lại.');
     } on http.ClientException {
-      throw ApiException('Không thể kết nối máy chủ tại $baseUrl.');
+      throw const ApiException(
+        'Chưa kết nối được dịch vụ. Hãy kiểm tra mạng và thử lại.',
+      );
     } on FormatException {
       throw const ApiException('Máy chủ trả về dữ liệu không hợp lệ.');
     } finally {
@@ -165,6 +174,10 @@ class ApiService {
         body: {'identifier': emailOrUsername.trim(), 'matKhau': password},
       ),
     );
+    return _acceptSession(response);
+  }
+
+  static SessionUser _acceptSession(Map<String, dynamic> response) {
     final token = response['token'];
     if (token is! String || token.isEmpty) {
       throw const ApiException('Máy chủ không trả về phiên đăng nhập hợp lệ.');
@@ -173,6 +186,46 @@ class ApiService {
     _sessionVersion++;
     _sessionExpired = false;
     return SessionUser.fromJson(_object(response['user']));
+  }
+
+  static Future<SessionUser> loginGoogle(
+    String idToken, {
+    String? currentPassword,
+  }) async => _acceptSession(
+    _object(
+      await request(
+        '/Auth/google',
+        method: 'POST',
+        authenticated: false,
+        body: {'idToken': idToken, 'currentPassword': ?currentPassword},
+      ),
+    ),
+  );
+  static Future<Map<String, dynamic>> requestPasswordReset(
+    String email,
+  ) async => _object(
+    await request(
+      '/Auth/forgot-password',
+      method: 'POST',
+      authenticated: false,
+      body: {'email': email.trim()},
+    ),
+  );
+  static Future<void> resetPassword(
+    String challengeId,
+    String code,
+    String password,
+  ) async {
+    await request(
+      '/Auth/reset-password',
+      method: 'POST',
+      authenticated: false,
+      body: {
+        'challengeId': challengeId,
+        'code': code.trim(),
+        'newPassword': password,
+      },
+    );
   }
 
   static Future<void> register({
@@ -194,6 +247,30 @@ class ApiService {
 
   static Future<SessionUser> me() async =>
       SessionUser.fromJson(_object(await request('/Auth/me')));
+  static Future<SessionUser> updateAccountProfile({
+    required String username,
+    required String email,
+    String? currentPassword,
+    String? avatarDataUrl,
+  }) async {
+    final body = <String, dynamic>{'tenDangNhap': username, 'email': email};
+    if (currentPassword != null) body['currentPassword'] = currentPassword;
+    if (avatarDataUrl != null) body['avatarDataUrl'] = avatarDataUrl;
+    return SessionUser.fromJson(
+      _object(await request('/Account/profile', method: 'PUT', body: body)),
+    );
+  }
+
+  static Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await request(
+      '/Account/password',
+      method: 'PUT',
+      body: {'currentPassword': currentPassword, 'newPassword': newPassword},
+    );
+  }
 
   static Future<List<Mood>> moods() async {
     final response = await request('/MoodMapping');
@@ -211,9 +288,25 @@ class ApiService {
     String source = 'manual',
     String mode = 'hybrid',
     String? analysisId,
+    double? valence,
+    double? arousal,
+    String? modelVersion,
     int limit = 12,
     bool balanced = false,
   }) async {
+    if (source == 'ai_va' &&
+        (valence == null ||
+            !valence.isFinite ||
+            valence < -1 ||
+            valence > 1 ||
+            arousal == null ||
+            !arousal.isFinite ||
+            arousal < -1 ||
+            arousal > 1 ||
+            modelVersion == null ||
+            modelVersion.isEmpty)) {
+      throw const ApiException('Thiếu kết quả AI hợp lệ. Hãy phân tích lại.');
+    }
     final result = RecommendationResult.fromJson(
       _object(
         await request(
@@ -227,11 +320,17 @@ class ApiService {
             'source': source,
             'mode': mode,
             'analysisId': analysisId,
+            if (source == 'ai_va') ...{
+              'valence': valence,
+              'arousal': arousal,
+              'modelVersion': modelVersion,
+            },
           },
         ),
       ),
     );
     historyRevision.value++;
+    activityRevision.value++;
     return result;
   }
 
@@ -239,14 +338,38 @@ class ApiService {
     String text, {
     required String language,
   }) async {
-    final response = _object(
-      await request(
-        '/MoodAnalysis',
-        method: 'POST',
-        body: {'text': text, 'language': language},
-      ),
-    );
-    return MoodAnalysisResult.fromApi(response);
+    if (language != 'vi' && language != 'en') {
+      throw const ApiException('Hãy chọn tiếng Việt hoặc tiếng Anh.');
+    }
+    if (text.trim().isEmpty) {
+      throw const ApiException('Hãy nhập mô tả tâm trạng trước.');
+    }
+    final Map<String, dynamic> response;
+    try {
+      response = _object(
+        await request(
+          '/MoodAnalysis/valence-arousal',
+          method: 'POST',
+          body: {'text': text.trim(), 'language': language},
+        ),
+      );
+    } on ApiException catch (error) {
+      if (error.statusCode == 503) {
+        final modelLanguage = language == 'vi' ? 'tiếng Việt' : 'tiếng Anh';
+        throw ApiException(
+          'Model $modelLanguage chưa sẵn sàng. Hãy thử lại sau hoặc chọn tâm trạng thủ công.',
+          statusCode: 503,
+        );
+      }
+      rethrow;
+    }
+    try {
+      return MoodAnalysisResult.fromVaApi(response, expectedLanguage: language);
+    } on FormatException {
+      throw const ApiException(
+        'Kết quả AI không hợp lệ hoặc sai ngôn ngữ. Hãy thử phân tích lại.',
+      );
+    }
   }
 
   static Future<List<ContentItem>> catalog(String type) async {
@@ -295,6 +418,7 @@ class ApiService {
         'recommendationId': recommendationId,
       },
     );
+    activityRevision.value++;
   }
 
   static Future<Map<String, dynamic>> interactions(int page) async =>
@@ -316,5 +440,56 @@ class ApiService {
         if (comment.trim().isNotEmpty) 'nhanXet': comment.trim(),
       },
     );
+    ratingsRevision.value++;
+    activityRevision.value++;
+  }
+
+  static Future<PagedResult<PersonalRating>> ownRatings(int page) async =>
+      PagedResult<PersonalRating>.fromJson(
+        _object(await request('/History/ratings?page=$page')),
+        PersonalRating.fromJson,
+      );
+
+  static Future<PagedResult<SavedEntry>> savedContents(
+    int page, {
+    String? type,
+  }) async => PagedResult<SavedEntry>.fromJson(
+    _object(
+      await request(
+        '/SavedContent?page=$page${type == null ? '' : '&type=${Uri.encodeQueryComponent(type)}'}',
+      ),
+    ),
+    SavedEntry.fromJson,
+  );
+
+  static Future<bool> isSaved(String id) async {
+    final data = _object(
+      await request('/SavedContent/${Uri.encodeComponent(id)}'),
+    );
+    if (data['saved'] is! bool) {
+      throw const ApiException('Chưa kiểm tra được mục đã lưu. Hãy thử lại.');
+    }
+    return data['saved'] as bool;
+  }
+
+  static Future<void> setSaved(String id, bool saved) async {
+    await request(
+      '/SavedContent/${Uri.encodeComponent(id)}',
+      method: saved ? 'PUT' : 'DELETE',
+    );
+    savedRevision.value++;
+  }
+
+  static Future<WeeklySummary> weeklySummary() async {
+    final data = _object(
+      await request(
+        '/Statistics?days=7&offsetMinutes=${DateTime.now().timeZoneOffset.inMinutes}',
+      ),
+    );
+    try {
+      return WeeklySummary.fromJson(data);
+    } on FormatException {
+      throw const ApiException('Chưa tải được tổng quan của bạn. Hãy thử lại.');
+    }
   }
 }

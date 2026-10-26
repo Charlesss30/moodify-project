@@ -1,4 +1,4 @@
-﻿# Backend (.NET)
+# Backend (.NET)
 backend/**/bin/
 backend/**/obj/
 backend/**/.vs/
@@ -67,3 +67,10 @@ docs/AI_ARTIFACT_MANIFEST.json
 docs/AI_AUDIT_REPRO_RESULTS.json
 docs/AI_DATABASE_ALIGNMENT_SNAPSHOT.json
 docs/TMDB_DATA_MIGRATION_RESULTS.json
+
+# Firebase/Gmail local configuration and service-account keys
+**/firebase-config.local.json
+**/firebase-admin*.json
+**/service-account*.json
+**/google-services.json
+**/GoogleService-Info.plist

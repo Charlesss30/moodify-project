@@ -7,9 +7,15 @@ import '../core/presentation.dart';
 
 /// A bounded chart: selecting a day never performs an API call or fills data gaps.
 class DailyTrendChart extends StatefulWidget {
-  const DailyTrendChart({super.key, required this.rows, this.activity = false});
+  const DailyTrendChart({
+    super.key,
+    required this.rows,
+    this.activity = false,
+    this.monthly = false,
+  });
   final List<dynamic> rows;
   final bool activity;
+  final bool monthly;
   @override
   State<DailyTrendChart> createState() => _DailyTrendChartState();
 }
@@ -35,6 +41,13 @@ class _DailyTrendChartState extends State<DailyTrendChart> {
           : r['valence'] != null || r['arousal'] != null,
     );
     if (selected < 0) selected = math.max(0, widget.rows.length - 1);
+  }
+
+  String _periodLabel(String? value) {
+    final date = DateTime.tryParse(value ?? '');
+    return widget.monthly && date != null
+        ? 'Tháng ${date.month}/${date.year}'
+        : 'Ngày ${shortDate(value, year: true)}';
   }
 
   void _select(int value) =>
@@ -75,7 +88,7 @@ class _DailyTrendChartState extends State<DailyTrendChart> {
         const SizedBox(height: 8),
         Semantics(
           label:
-              'Biểu đồ theo ngày. Đang chọn ${shortDate(row['date'] as String?, year: true)}',
+              'Biểu đồ theo ${widget.monthly ? 'tháng' : 'ngày'}. Đang chọn ${_periodLabel(row['date'] as String?)}',
           child: LayoutBuilder(
             builder: (context, constraints) => GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -101,6 +114,7 @@ class _DailyTrendChartState extends State<DailyTrendChart> {
                       rows: rows,
                       selected: selected,
                       activity: widget.activity,
+                      monthly: widget.monthly,
                       labelColor: textStyle.color ?? AppColors.textSecondary,
                       fontSize: MediaQuery.textScalerOf(context)
                           .scale(11)
@@ -125,12 +139,12 @@ class _DailyTrendChartState extends State<DailyTrendChart> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Ngày ${shortDate(row['date'] as String?, year: true)}',
+                      _periodLabel(row['date'] as String?),
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Ngày trước',
+                    tooltip: widget.monthly ? 'Tháng trước' : 'Ngày trước',
                     visualDensity: VisualDensity.compact,
                     onPressed: selected == 0
                         ? null
@@ -138,7 +152,7 @@ class _DailyTrendChartState extends State<DailyTrendChart> {
                     icon: const Icon(Icons.chevron_left),
                   ),
                   IconButton(
-                    tooltip: 'Ngày sau',
+                    tooltip: widget.monthly ? 'Tháng sau' : 'Ngày sau',
                     visualDensity: VisualDensity.compact,
                     onPressed: selected == rows.length - 1
                         ? null
@@ -151,13 +165,15 @@ class _DailyTrendChartState extends State<DailyTrendChart> {
                 Text('${row['interactions'] ?? 0} tương tác', style: textStyle)
               else if (!hasMood)
                 Text(
-                  'Chưa ghi nhận tâm trạng trong ngày này.',
+                  widget.monthly
+                      ? 'Chưa ghi nhận tâm trạng trong tháng này.'
+                      : 'Chưa ghi nhận tâm trạng trong ngày này.',
                   style: textStyle,
                 )
               else ...[
                 if (row['moodCount'] is num)
                   Text(
-                    '${row['moodCount']} lượt ghi nhận · trung bình trong ngày',
+                    '${row['moodCount']} lượt ghi nhận · trung bình trong ${widget.monthly ? 'tháng' : 'ngày'}',
                     style: textStyle,
                   ),
                 const SizedBox(height: 4),
@@ -172,8 +188,8 @@ class _DailyTrendChartState extends State<DailyTrendChart> {
         const SizedBox(height: 10),
         Text(
           widget.activity
-              ? 'Chạm vào cột để xem số lượt mở nội dung trong ngày.'
-              : 'Chạm vào biểu đồ để xem từng ngày. Đường ngắt khi thiếu bản ghi, không tự tính thành điểm 0.',
+              ? 'Chạm vào cột để xem số lượt mở nội dung trong ${widget.monthly ? 'tháng' : 'ngày'}.'
+              : 'Chạm vào biểu đồ để xem từng ${widget.monthly ? 'tháng' : 'ngày'}. Đường ngắt khi thiếu bản ghi, không tự tính thành điểm 0.',
           style: textStyle,
         ),
       ],
@@ -219,6 +235,7 @@ class _TrendPainter extends CustomPainter {
     required this.rows,
     required this.selected,
     required this.activity,
+    this.monthly = false,
     required this.labelColor,
     required this.fontSize,
   });
@@ -227,6 +244,7 @@ class _TrendPainter extends CustomPainter {
   final List<dynamic> rows;
   final int selected;
   final bool activity;
+  final bool monthly;
   final Color labelColor;
   final double fontSize;
   void label(
@@ -361,7 +379,9 @@ class _TrendPainter extends CustomPainter {
     for (final i in indexes) {
       label(
         canvas,
-        shortDate(rows[i]['date'] as String?),
+        monthly
+            ? 'T${DateTime.tryParse('${rows[i]['date']}')?.month ?? ''}'
+            : shortDate(rows[i]['date'] as String?),
         Offset(x(i), top + height + 10),
         align: i == 0
             ? TextAlign.left

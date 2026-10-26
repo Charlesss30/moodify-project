@@ -1,15 +1,15 @@
-﻿# Moodify — Gợi ý phim và âm nhạc theo tâm trạng
+# Moodify — Gợi ý phim và âm nhạc theo tâm trạng
 
 Hệ thống gồm Flutter, website Admin/AIEngineer, ASP.NET Core API và Python inference RoBERTa. Dữ liệu nghiệp vụ dùng **MongoDB**, phim tích hợp **TMDB**, nhạc tích hợp **Spotify**. Repo không chứa database cá nhân, file phim/nhạc hay trọng số model.
 
 ## Chức năng
 
-- User: đăng ký/đăng nhập; quiz emoji; khám phá mô tả tiếng Anh hoặc chọn mood; thư viện; chi tiết phim/nhạc, trailer YouTube, Spotify player và liên kết gốc; lịch sử tương tác; đánh giá 1–5 sao, nhận xét trong chi tiết.
+- User: đăng ký/đăng nhập email hoặc Google; quên mật khẩu qua email; cài đặt thông báo đẩy Android; quiz emoji; khám phá mô tả tiếng Việt/tiếng Anh hoặc chọn mood; thư viện; nội dung được quan tâm/vừa cập nhật; thống kê theo ngày/năm; chi tiết phim/nhạc, trailer YouTube, Spotify player và liên kết gốc; lịch sử tương tác; đánh giá 1–5 sao, nhận xét trong chi tiết.
 - Admin: nội dung, thể loại, người dùng, mood/vùng VA; Feedback; Users → Activity; Recommendations và quản lý vòng đời model.
 - AIEngineer: AI overview, Models, Emotion mapping, Evaluation, Datasets, Training jobs, Feedback analytics, Inference lab, Recommendations.
 - Recommender: Mood Matching + Content-based + Collaborative Filtering; phản hồi mới cập nhật hồ sơ và thứ hạng ở yêu cầu tiếp theo.
 
-AI hiện hỗ trợ **tiếng Anh**, cần người dùng xác nhận mood và có fallback thủ công. Mapping còn thử nghiệm. Training jobs chuẩn bị notebook Colab/nhận báo cáo, **không tự train GPU trên web**. Feedback Loop không phải Reinforcement Learning.
+Phân tích mô tả hỗ trợ **tiếng Việt qua PhoBERT** và **tiếng Anh qua RoBERTa VA** khi artifact tương ứng đã được cài, kích hoạt và runtime sẵn sàng. Mobile tự nhận diện ngôn ngữ và hiển thị model dưới ô nhập; Web chọn ngôn ngữ trên form. Người dùng xác nhận mood trước khi lấy gợi ý và có thể chọn mood thủ công. Mapping còn thử nghiệm. Training jobs chuẩn bị notebook Colab/nhận báo cáo, **không tự train GPU trên web**. Feedback Loop không phải Reinforcement Learning.
 
 ## Cấu trúc repository
 
@@ -38,7 +38,9 @@ npm ci --prefix scripts
 cd mobile-app
 flutter pub get
 cd ..
-Copy-Item backend/appsettings.Development.example.json backend/appsettings.Development.json
+if (-not (Test-Path backend/appsettings.Development.json)) {
+    Copy-Item backend/appsettings.Development.example.json backend/appsettings.Development.json
+}
 ```
 
 Điền `Tmdb:AccessToken`, `Spotify:ClientId`, `Spotify:ClientSecret` trong file Development thật, đã gitignore. Có thể dùng biến môi trường `Tmdb__AccessToken`, `Spotify__ClientId`, `Spotify__ClientSecret`, `Mongo__ConnectionString`, `Mongo__Database`, `Jwt__Key`. Không đưa credential vào Flutter/JavaScript trình duyệt.
@@ -94,16 +96,52 @@ Runner Windows, sau khi MongoDB/dependency sẵn sàng:
 
 Backend: `http://127.0.0.1:5170`; dashboard: `http://127.0.0.1:5174`; log: `%LOCALAPPDATA%/Moodify/logs`. Runner kiểm tra DB chỉ đọc, không chiếm cổng tiến trình khác và không tự chạy cùng Windows. Stop không dừng MongoDB.
 
-Hoặc chạy thủ công, mỗi lệnh ở một terminal, `Ctrl+C` để dừng:
+Hoặc chạy thủ công trong ba terminal PowerShell riêng. Các ví dụ dưới đây bắt đầu ở thư mục gốc project; `Ctrl+C` dừng dịch vụ trong terminal tương ứng.
+
+Terminal API (bật kết nối tới AI local):
 
 ```powershell
+$env:AI__Enabled = "true"
+$env:AI__ServiceUrl = "http://127.0.0.1:8001/"
 dotnet run --project backend/mood_recommendation.csproj --launch-profile http
+```
+
+Terminal Admin:
+
+```powershell
 npm run dev --prefix admin-web
 ```
+
+Terminal AI — ví dụ model tiếng Anh `roberta_large_asl_en_01` đã có artifact và virtualenv:
+
+```powershell
+cd ai-service
+$env:AI_MODEL_ENABLED = "true"
+$env:MODEL_SHA256 = "EA865317D9EB7CF1B39008062276BAE441801A7D719D33177A3DDD1851AF7B09"
+$env:VI_MODELS_ROOT = Join-Path (Split-Path -Parent (Get-Location).Path) "code-train/train-KLCN/output/vietnamese-emotion"
+$env:VI_ACTIVE_MODEL_FILE = Join-Path $env:LOCALAPPDATA "Moodify/vi-active-model.txt"
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8001 --workers 1
+```
+
+Nếu đã cài checkpoint VA chuẩn ở `output/roberta_va_regression`, thêm `$env:VA_MODEL_ENABLED = "true"` trước lệnh Uvicorn để nạp cả VA khi khởi động. Model PhoBERT được chọn trong dashboard được lưu tại marker `vi-active-model.txt`; các package `pyvi` và `sentencepiece` phải được cài trong đúng virtualenv qua `pip install -r requirements.txt`.
+
+Readiness của model tiếng Anh: `http://127.0.0.1:8001/health/ready`. Model VA và tiếng Việt cần artifact riêng; pull source code không tự tải weights về. Các lệnh VA nằm ở mục AI bên dưới. Model registry đã activate và runtime sẵn sàng là hai trạng thái riêng.
+
+Sau khi pull/merge, runner build backend trước khi nạp AI để báo lỗi C# ngay. Thiếu RAM theo ngưỡng khuyến nghị được báo cảnh báo; runner vẫn kiểm tra hash, VRAM và readiness của model.
 
 Không chạy runner và dotnet run cùng cổng. Swagger Development: `http://localhost:5170/swagger`. Đăng nhập tại `http://localhost:5170`: Admin/AIEngineer vào dashboard đúng vai trò, nhận phiên một lần không đăng nhập lại. Giữ nhất quán localhost hoặc 127.0.0.1 trong luồng chuyển trang.
 
 ## 4. Chạy Flutter
+
+Trên Windows, đặt `PUB_CACHE` cố định nếu muốn cache nằm cùng thư mục cha của project. Ví dụ project ở `D:\hoc-tap\moodify-project` thì cache dùng `D:\hoc-tap\moodify-pub-cache`. Chạy một lần tại root project:
+
+```powershell
+$pubCacheDir = Join-Path (Split-Path -Parent (Get-Location).Path) "moodify-pub-cache"
+[Environment]::SetEnvironmentVariable("PUB_CACHE", $pubCacheDir, "User")
+$env:PUB_CACHE = $pubCacheDir
+```
+
+Đóng và mở lại Android Studio/VS Code sau khi đổi biến môi trường. Những lần `flutter pub get`, `flutter run` và build tiếp theo sẽ dùng cache này. Cache chỉ chứa dependency tải được lại, không đưa lên Git. Không dùng `pub upgrade` chỉ để chuyển thư mục cache.
 
 ```powershell
 cd mobile-app
@@ -129,7 +167,7 @@ flutter run -d <device-id> --dart-define=API_BASE_URL=http://192.168.1.100:5170
 Khôi phục artifact được cấp riêng tại `code-train/train-KLCN/output/roberta_large_asl_en_01/`, gồm `best_model`, `deployment`, `run_config.json`. Không chỉ chép model.safetensors. Model VA EmoBank dùng riêng file `code-train/train-KLCN/output/roberta_va_regression/roberta_va_regression.pt` và thư mục `tokenizer`; runner nhận diện model này và cung cấp endpoint riêng. Xem [artifact](code-train/README.md) và [Python environment](ai-service/README.md).
 
 1. Cài `ai-service/.venv`, đặt artifact cần dùng đúng thư mục, chạy `./Start.ps1` không có WithoutAI. VA có thể chạy riêng khi chưa có artifact phân loại cũ.
-2. Đợi runner báo `Valence/arousal inference ready` trên cổng 8001. Website người dùng → Home → nhập mô tả tiếng Anh → Analyze Mood → xem tọa độ VA/mood → Show recommendations. Registry model cảm xúc 28 nhãn không quản lý model VA.
+2. Đợi runner báo model tương ứng đã sẵn sàng trên cổng 8001. Website người dùng → Home → AI Mood Analysis → chọn English hoặc Tiếng Việt → nhập mô tả → phân tích → xem mood → nhận gợi ý. Trên Mobile: Khám phá → nhập mô tả (mặc định tự nhận diện Việt/Anh) → Phân tích tâm trạng → Xác nhận và nhận gợi ý. Kết quả Mobile hiển thị model và phiên bản đã xử lý; không còn gọi classifier 28 nhãn cũ. Registry classifier 28 nhãn vẫn là luồng riêng.
 3. Nếu dùng classifier cũ, đăng nhập Admin/AIEngineer → Models → Validate → Activate. Runtime ready và registry active là hai điều kiện riêng; runner không tự Activate. Emotion mapping chỉ áp dụng cho classifier 28 nhãn.
 4. Datasets → Training jobs: tải bundle/notebook, chạy Colab bên ngoài rồi nhập báo cáo. Tạo job không tự triển khai model mới.
 
@@ -186,3 +224,37 @@ Chưa hoàn tất đánh giá NLP/recommender độc lập, đo thời lượng 
 - [File giữ lại và chuyển riêng](docs/REPOSITORY_CLEANUP.md).
 
 README là điểm bắt đầu hiện tại; tài liệu theo ngày có thể phản ánh trạng thái cũ.
+
+### Phân tích AI song ngữ trên Mobile
+
+Mobile gọi `POST /api/MoodAnalysis/valence-arousal`: `language=vi` dùng PhoBERT đang active; `language=en` dùng RoBERTa VA đang active. Khi nhận gợi ý, app gửi nguyên điểm valence/arousal và `modelVersion` với `source=ai_va`; backend lưu phiên bản đó trong lịch sử. Kết quả PhoBERT dưới ngưỡng tin cậy không tự chọn mood; người dùng có thể nhập rõ hơn hoặc chọn thủ công.
+
+Nhận diện ngôn ngữ là quy tắc nhẹ chạy trên máy, không tải thêm model lên điện thoại. Mobile chỉ dùng tự nhận diện và hiện model dưới ô nhập. Với câu không dấu, quá ngắn hoặc pha ngôn ngữ, nhận diện có thể chưa chính xác; nên diễn đạt rõ bằng một ngôn ngữ. Xem [20 ca thử và cách xác định model](docs/AI_MODEL_TEST_CASES.md). Trọng số model vẫn chạy ở Python service, không đóng gói trong APK.
+
+
+### Các phần Mobile bổ sung ngày 25/10/2026
+
+- Thống kê: chọn **Theo năm**, biểu đồ theo tháng và múi giờ thiết bị.
+- Phim: diễn viên, năm phát hành, thời lượng từ TMDB và popup Admin; phim cũ thiếu dữ liệu được bổ sung khi mở chi tiết nếu có ID nguồn.
+- Khám phá: nút xu hướng → **Nội dung nổi bật** → Được quan tâm trong Moodify / Vừa cập nhật, lọc phim/nhạc.
+
+Xem [đối chiếu đề cương, cách dùng và phạm vi kiểm thử](docs/MOBILE_FEATURE_COMPLETION_2026-10-25.md). Quên mật khẩu, đăng nhập Google và push Android đã được bổ sung ở lượt tiếp theo; cấu hình dịch vụ theo mục dưới.
+
+### Quên mật khẩu, Google và thông báo Android — 26/10/2026
+
+- Màn đăng nhập có **Quên mật khẩu**: nhận mã email và đặt mật khẩu mới. Gmail SMTP dùng app password.
+- **Tiếp tục với Google** xác minh bằng Firebase Auth ở backend. Email đã có tài khoản cần mật khẩu Moodify để liên kết.
+- **Cá nhân → Thông báo**: chủ động bật nhận push, nhắc tâm trạng hằng ngày/nhìn lại tuần, chọn giờ và gửi thử. Backend phải chạy để gửi theo lịch.
+
+Cấp riêng `mobile-app/android/app/google-services.json` và `backend/firebase-adminsdk.json` cùng Firebase project, bật Google provider/thêm chứng chỉ ký Android, rồi tại root:
+
+```powershell
+# Đồng bộ Firebase và giữ các cấu hình local hiện có:
+.\scripts\configure-mobile-services.ps1
+# Máy mới: cấu hình Gmail, app password được nhập ẩn khi script hỏi:
+.\scripts\configure-mobile-services.ps1 -GmailAddress 'your-address@gmail.com'
+```
+
+Script giữ các section TMDB/Spotify/AI và sao lưu cấu hình cũ trước khi ghi. Credential nằm trong file local đã gitignore; không đưa service account hoặc app password lên Git. Khởi động lại backend, Stop rồi Run app hoàn toàn trong Android Studio để nhận native plugin mới.
+
+Xem [hướng dẫn cấu hình, cách thử và giới hạn](docs/AUTH_NOTIFICATIONS_SETUP.md). Android tự đọc `google-services.json`; Web Google cần cấu hình Firebase Web riêng, chưa có Web/iOS push. Kiểm thử hiện tại: 67 Flutter tests, 612 API/nghiệp vụ assertions; xác thực SMTP/Firebase thật thành công nhưng chưa xác minh email/push tới thiết bị hoặc chọn Google account thật. APK debug đã build thành công.

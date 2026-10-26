@@ -43,6 +43,9 @@ class ContentItem {
     this.artist,
     this.director,
     this.durationSeconds,
+    this.releaseYear,
+    this.runtimeMinutes,
+    this.cast = const [],
     this.album,
     this.valence,
     this.arousal,
@@ -64,6 +67,9 @@ class ContentItem {
   final String? artist;
   final String? director;
   final int? durationSeconds;
+  final int? releaseYear;
+  final int? runtimeMinutes;
+  final List<String> cast;
   final String? album;
   final double? valence;
   final double? arousal;
@@ -129,6 +135,23 @@ class ContentItem {
       director: _optionalString(
         json['director'] ?? movie['director'] ?? movie['Director'],
       ),
+      releaseYear: _optionalInt(
+        movie['releaseYear'] ??
+            json['releaseYear'] ??
+            '${music['releaseDate'] ?? ''}'.split('-').first,
+      ),
+      runtimeMinutes: _optionalInt(
+        movie['runtimeMinutes'] ?? json['runtimeMinutes'],
+      ),
+      cast: (movie['cast'] ?? json['cast']) is List
+          ? List<String>.unmodifiable(
+              ((movie['cast'] ?? json['cast']) as List)
+                  .whereType<String>()
+                  .map((value) => value.trim())
+                  .where((value) => value.isNotEmpty)
+                  .toSet(),
+            )
+          : const [],
       artist: _optionalString(
         json['artist'] ?? music['tenNgheSi'] ?? music['TenNgheSi'],
       ),
@@ -205,6 +228,7 @@ class MoodHistoryEntry {
     this.recommendedItems,
     this.algorithm,
     this.source,
+    this.recommendationId,
   });
 
   final int id;
@@ -216,6 +240,7 @@ class MoodHistoryEntry {
   final List<ContentItem>? recommendedItems;
   final String? algorithm;
   final String? source;
+  final String? recommendationId;
 
   factory MoodHistoryEntry.fromJson(Map<String, dynamic> json) =>
       MoodHistoryEntry(
@@ -238,6 +263,7 @@ class MoodHistoryEntry {
             : null,
         algorithm: _optionalString(json['algorithm']),
         source: _optionalString(json['source']),
+        recommendationId: _optionalString(json['recommendationId']),
       );
 }
 

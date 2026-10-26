@@ -1,5 +1,7 @@
 # Cập nhật giao diện và trải nghiệm mobile — 24/10/2026
 
+> **Khôi phục ngày 25/10/2026:** Các màn hình và tối ưu Mobile trong tài liệu này đã được phục hồi từ `eeda4b6` sau khi commit `6fc37c9` ghi đè một phần. Khám phá giữ giao diện đã nâng cấp nhưng hiện dùng luồng AI song ngữ mới: tiếng Việt → PhoBERT, tiếng Anh → RoBERTa VA. Những mô tả English-only/analysisId trong báo cáo ngày 24/10 bên dưới là trạng thái của lần triển khai cũ.
+
 ## Phạm vi
 
 Thực hiện hai nhóm đã được duyệt: nâng giao diện các màn hiện có và tối ưu cách tải/hiển thị trong Flutter. Giữ năm tab Trang chủ, Khám phá, Thư viện, Lịch sử, Cá nhân. Cơ sở đối chiếu là đề cương CNTT-KLCN318 và các luồng nghiệp vụ đang có trong project.
@@ -87,3 +89,58 @@ Push-Location mobile-app
 flutter run --profile -d <device-id> --dart-define=API_BASE_URL=http://<IP-may-backend>:5170
 Pop-Location
 ```
+
+
+## Phạm vi khôi phục ngày 25/10/2026
+
+- Phục hồi theme chung, các màn Trang chủ/Khám phá/Thư viện/Chi tiết/Lịch sử/Cá nhân và form đăng nhập/đăng ký theo `eeda4b6`.
+- Khôi phục tài khoản: sửa tên, ảnh camera/thư viện, đổi email xác nhận mật khẩu, đổi mật khẩu; giữ trạng thái tài khoản sau cập nhật.
+- Nối lại Thống kê, tổng quan 7 ngày, Đánh giá của tôi và Đã lưu; phục hồi notifier làm mới dữ liệu, tải tab lần đầu, cache catalog, danh sách khi cuộn và quản lý vòng đời player.
+- Khôi phục trường avatar trong phản hồi đăng nhập/me và metadata/snapshot trong API lịch sử đánh giá để các màn cá nhân dùng được dữ liệu hiện có.
+- Giữ API AI song ngữ, tự nhận diện ngôn ngữ và V/A/modelVersion khi yêu cầu gợi ý. Chi tiết phiên bản và nhãn nằm trong mục **Thông tin phân tích** để thẻ kết quả gọn hơn.
+- Dependency `image_picker` lấy lại theo lockfile cũ; `pub get --offline --enforce-lockfile` thành công, dùng `D:\hoc-tap\moodify-pub-cache`.
+- Bản sao các file trước khôi phục nằm trong `.local-backups/mobile-restore-20261025-211808/` (được Git bỏ qua). Không đổi nhánh hoặc reset lịch sử Git; không chạy thao tác thay đổi dữ liệu MongoDB thật.
+- Xác minh trong lượt khôi phục: **57 Flutter tests pass**, `flutter analyze --no-pub` sạch, backend build thành công với 0 warning/error. Kiểm thử Flutter dùng HTTP giả lập; chưa thực hiện lại kiểm thử API với database hoặc suy luận thật trong lượt này.
+- Build APK debug sau khôi phục đã thành công: `mobile-app/build/app/outputs/flutter-apk/app-debug.apk`. Chưa cài/chạy lại bản APK này trên emulator hoặc điện thoại trong lượt khôi phục.
+- Để nhận đủ thay đổi trong Android Studio, dừng phiên app cũ rồi Run lại hoàn toàn; `image_picker` là plugin native nên chỉ hot reload chưa đủ. Khởi động lại backend để nạp phản hồi avatar và metadata đánh giá vừa khôi phục.
+
+## Bổ sung theo đề cương sau khôi phục
+
+Ngày 25/10/2026 đã bổ sung thống kê theo năm lịch, metadata phim (diễn viên/năm/thời lượng) và màn Nội dung nổi bật trong Moodify. Xem [quyết định tính năng, nguồn tham khảo, cách dùng và kiểm thử](MOBILE_FEATURE_COMPLETION_2026-10-25.md). Các mô tả chưa triển khai năm/metadata/khám phá trong báo cáo gốc ngày 24/10 phía trên là trạng thái trước lượt bổ sung này.
+
+## Bổ sung tài khoản và thông báo — 26/10/2026
+
+Sau phạm vi làm mới UI, đã bổ sung quên mật khẩu Gmail, đăng nhập/liên kết Google và thông báo đẩy Android. Không đưa mục cá nhân hoá đã bỏ trở lại. Phần “không triển khai” ở phạm vi cũ chỉ mô tả lượt UI trước đó.
+
+67 Flutter tests, 612 kiểm tra HTTP/nghiệp vụ trên DB tạm và build APK debug đã pass; Gmail/Firebase xác thực thật thành công. Luồng nhận email/push và chọn tài khoản Google trên thiết bị còn cần thử thực tế. Xem [cấu hình và hướng dẫn sử dụng](AUTH_NOTIFICATIONS_SETUP.md).
+
+## Màn khởi động chuyển động — 26/10/2026
+
+- Màn mở đầu dùng bảng màu tối/tím của Moodify: đĩa than có rãnh xoay nhẹ, hai dải phim chuyển động, tên ứng dụng và ba chấm tải. Kết thúc bằng zoom nhẹ và fade để hiện giao diện ứng dụng.
+- Flutter vẽ bằng CustomPainter và animation có sẵn; không thêm package, video/GIF, ảnh tải mạng hay hiệu ứng blur toàn màn hình. Vùng artwork có RepaintBoundary; animation dừng và lớp splash được gỡ sau khi hoàn tất.
+- Firebase/thông báo khởi tạo trong lúc splash hiện. Khi bình thường, phần mở đầu khoảng 2,1 giây (1,45 giây giới thiệu + 650 ms chuyển cảnh); hai việc chạy song song. Optional initialization có giới hạn chờ 8 giây, sau đó app vẫn mở được. Không chờ tải model AI trong splash.
+- Chỉ chạy một lần theo vòng đời root app; không lặp khi đổi tab, đăng nhập, đăng xuất hoặc quay lại từ nền. Tắt chuyển động/accessible navigation của hệ thống sẽ giữ hình tĩnh trong lúc khởi tạo và bỏ thời gian trang trí/zoom.
+- Đồng bộ nền native Android về #0D0F14 cả sáng/tối; Android 12+ có biểu tượng đĩa than/dải phim thay icon mặc định của splash hệ thống. Giữ metadata FCM và luồng đăng nhập đã có. Cách cấu hình native dựa trên [Flutter Android splash](https://docs.flutter.dev/platform-integration/android/splash-screen).
+- Analyzer các file mới/thay đổi sạch, 74 Flutter tests pass. Bảy ca mới kiểm tra init chậm/lỗi, timeout, giảm chuyển động, không phát lại, dispose an toàn và màn 320 × 480 với chữ tăng 40%.
+- Đã render và xem bố cục Flutter ở 390 × 844; artifact local ở `.local-build/moodify-opening-preview.png`. Chưa đo FPS/bộ nhớ trên điện thoại thật; không coi widget tests là bằng chứng tốc độ khung hình.
+- APK debug mới build thành công. Emulator đã ngắt kết nối trước bước cài/chạy, nên lượt này chưa xác minh chuyển cảnh native trên emulator; mở lại emulator và Stop/Run hoàn toàn từ Android Studio để nạp theme Android mới.
+
+## Thống nhất icon ứng dụng — 26/10/2026
+
+Dùng cùng biểu tượng đĩa than và dải phim cho launcher, splash native, animation mở đầu, đăng nhập/đăng ký và góc thương hiệu Trang chủ. Hai logo waveform cũ trong Flutter đã được thay. `MoodifyMarkPainter` là bản vẽ dùng chung; icon màu được xuất trực tiếp từ painter, không thêm thư viện hoặc tải ảnh mạng.
+
+- Android: thay PNG launcher ở năm mật độ; thêm adaptive icon nền/foreground cho API 26+ và bản monochrome cho themed icon API 33+. Splash native dùng bản xuất của cùng hình, bỏ vector cũ để không còn hai thiết kế.
+- Thông báo: khai báo icon nhỏ một màu, giản lược cùng hình đĩa than/dải phim. Đây là bản thích ứng cho thanh trạng thái, không dùng ảnh launcher màu làm icon nhỏ.
+- Flutter Web: đồng bộ favicon, PWA icon thường/maskable, tên Moodify và nền #0D0F14.
+- Windows: thay `app_icon.ico` đa kích thước. File ICO đã mở/giải mã được bằng Windows System.Drawing; chưa build/chạy Windows trong lượt này.
+- Ảnh gốc xuất để xem: `mobile-app/assets/branding/moodify-icon.png`. Icon trên Flutter dùng painter tĩnh, không chạy animation nền.
+
+Tạo lại bộ icon khi sửa bản vẽ, từ thư mục `mobile-app`:
+
+```powershell
+flutter test --no-pub tool/generate_brand_icons.dart
+```
+
+Cách tách background/foreground và lớp monochrome theo [Android adaptive icons](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive). Analyzer sạch; 20 kiểm tra hồi quy startup, Trang chủ, đăng nhập/Google, thông báo và gửi đánh giá đã pass. Đã xem ảnh icon xuất ra. Cần Stop/Run hoặc cài APK mới để launcher và splash native cập nhật; hot reload chỉ cập nhật phần Flutter.
+
+APK debug với bộ icon đồng bộ đã build thành công. Hiện không có emulator/thiết bị kết nối để cài và xem launcher thật trong lượt này.

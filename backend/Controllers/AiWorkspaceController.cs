@@ -278,6 +278,12 @@ public sealed class JobInput
 }
 public sealed class AiTrainingJob
 {
+    public int? WorkerPid { get; set; }
+    public string? WorkerHash { get; set; }
+    public string? BaseArtifactHash { get; set; }
+    public string Execution { get; set; } = "external";
+    public bool ArtifactVerified { get; set; }
+    public string? Failure { get; set; }
     [BsonId] public string Id { get; set; } = "";
     public string DatasetId { get; set; } = "";
     public string DatasetHash { get; set; } = "";

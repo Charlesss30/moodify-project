@@ -1,0 +1,6 @@
+{"stage": "loading", "device": "cpu"}
+{"stage": "training", "epoch": 1, "epochs": 1, "step": 1, "steps": 1, "loss": 0.14162257313728333}
+{"stage": "selection", "epoch": 1, "epochs": 1, "loss": 0.14162257313728333, "microF1": 0.11764705926179886, "macroF1": 0.0357142873108387}
+{"stage": "calibration"}
+{"stage": "test"}
+{"stage": "completed", "microF1": 1.0, "macroF1": 0.0357142873108387, "artifactHash": "aa920957c79fb59743fcdbfcfea83923d219b6276ddc517d0ddd0db360eb2c8c"}

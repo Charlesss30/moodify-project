@@ -13,7 +13,6 @@ $aiDir = Join-Path $root "ai-service"
 $modelDir = Join-Path $root "code-train\train-KLCN\output\roberta_large_asl_en_01\best_model"
 $vaModelDir = Join-Path $root "code-train\train-KLCN\output\roberta_va_regression"
 $viModelRoot = Join-Path $root "code-train\train-KLCN\output\vietnamese-emotion"
-$viModelRoot = Join-Path $root "code-train\train-KLCN\output\vietnamese-emotion"
 $modelHash = "EA865317D9EB7CF1B39008062276BAE441801A7D719D33177A3DDD1851AF7B09"
 $apiPort = 5170
 $adminPort = 5174
@@ -314,6 +313,17 @@ try {
         throw "Port $aiPort is occupied by an unmanaged process. No existing process was stopped."
     }
 
+    # Fail on merge/build errors before allocating memory to model loading.
+    $buildOutput = & dotnet build (Join-Path $backendDir "mood_recommendation.csproj") `
+        --configuration Release 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Backend build failed: $($buildOutput -join ' ')"
+    }
+    $backendDll = Join-Path $backendDir "bin\Release\net10.0\mood_recommendation.dll"
+    if (-not (Test-Path -LiteralPath $backendDll)) {
+        throw "Backend build succeeded but output DLL is missing: $backendDll"
+    }
+
     if (-not $WithoutAI) {
         $python = Join-Path $aiDir ".venv\Scripts\python.exe"
         $artifact = Join-Path $modelDir "model.safetensors"
@@ -327,7 +337,7 @@ try {
         $freeRamMiB = [math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1024)
         $minimumRamMiB = if ($hasEmotionModel -and $hasVaModel) { 3500 } elseif ($hasEmotionModel) { 2500 } else { 1800 }
         if ($freeRamMiB -lt $minimumRamMiB) {
-            throw "Only $freeRamMiB MiB physical RAM is free; at least $minimumRamMiB MiB is required for the configured local model(s)."
+            Write-Warning "Only $freeRamMiB MiB physical RAM is free; $minimumRamMiB MiB is recommended for the configured local model(s). Loading may be slow. Close unused apps or use -WithoutAI if necessary; model readiness will still be checked."
         }
         $nvidiaSmi = Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue
         if ($nvidiaSmi) {
@@ -397,14 +407,6 @@ try {
                 Write-Output "Vietnamese emotion inference ready: $($viRuntime.model_version), $($viRuntime.inference_device)."
             }
         }
-        $viActiveFile = Join-Path $stateDir "vi-active-model.txt"
-        if (Test-Path -LiteralPath $viActiveFile) {
-            $viVersion = (Get-Content -LiteralPath $viActiveFile -Raw).Trim()
-            if ($viVersion -match '^[A-Za-z0-9][A-Za-z0-9_-]{2,79}$') {
-                $viRuntime = Invoke-Readiness "$($aiUrl)health/vi/ready" 240 $viVersion
-                Write-Output "Vietnamese emotion inference ready: $($viRuntime.model_version), $($viRuntime.inference_device)."
-            }
-        }
         $inferenceListener = Get-Listener $aiPort
         if (-not $inferenceListener) {
             throw "Inference readiness passed, but port $aiPort has no listening process."
@@ -421,15 +423,6 @@ try {
         }
     }
 
-    $buildOutput = & dotnet build (Join-Path $backendDir "mood_recommendation.csproj") `
-        --no-restore --configuration Release 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "Backend build failed: $($buildOutput -join ' ')"
-    }
-    $backendDll = Join-Path $backendDir "bin\Release\net10.0\mood_recommendation.dll"
-    if (-not (Test-Path -LiteralPath $backendDll)) {
-        throw "Backend build succeeded but output DLL is missing: $backendDll"
-    }
     $backendEnvironment = @{
         ASPNETCORE_ENVIRONMENT = "Development"
         ASPNETCORE_URLS = "http://${ListenAddress}:${apiPort}"

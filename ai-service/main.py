@@ -246,9 +246,8 @@ def list_va_models():
 
 @app.post("/models/va/activate")
 def activate_va_model(request: ActivateVARequest):
-    if app.state.va_predictor is None:
-        raise HTTPException(status_code=503, detail="Valence/arousal runtime is unavailable.")
-    if request.version == app.state.va_active_version:
+    # A newly uploaded candidate can bootstrap an empty VA runtime.
+    if app.state.va_predictor is not None and request.version == app.state.va_active_version:
         return {"status": "ready", "active_version": request.version,
                 "device": app.state.va_predictor.device}
     if not _predict_lock.acquire(blocking=False):

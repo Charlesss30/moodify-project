@@ -53,11 +53,12 @@ export async function mountAiWorkspace(host, tab, user, mountModels) {
       const data = await request('/Models/va')
       const runtime = data.runtime || {}
       const catalog = data.catalog || {}
-      render(panel('Upload a valence/arousal model', `<p>Create a ZIP or RAR containing one <code>.pt</code> checkpoint and the full <code>tokenizer/</code> folder, including <code>tokenizer.json</code>. The checkpoint may be at the archive root or inside one folder. Maximum package size: 2 GB.</p><form id="va-upload-form"><label class="field">New model version<input name="version" required minlength="3" maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,79}" placeholder="roberta_va_regression_v2"></label><label class="field">Model package (.zip or .rar)<input name="package" type="file" accept=".zip,.rar,application/zip,application/vnd.rar,application/x-rar-compressed" required></label><button class="primary-button" type="submit">Upload and activate</button></form><p>The dashboard stores the candidate, loads it and runs a readiness prediction. If it fails, your active model stays in service. Existing versions are never overwritten.</p>`) + panel('Available model versions', `<p>Uploaded and preinstalled versions appear here. You can reactivate any version in the list.</p>${table(['Version', 'Checkpoint', 'Tokenizer', 'State', 'Action'], (catalog.items || []).map(item => {
+      const runtimePanel = panel('Valence/arousal runtime', `<p>Status: <strong>${esc(runtime.status || 'unavailable')}</strong> · Active version: <strong>${esc(runtime.modelVersion || 'None')}</strong> · Device: ${esc(runtime.inferenceDevice || '—')}</p>`)
+      render(runtimePanel + panel('Upload a valence/arousal model', `<p>Create a ZIP or RAR containing one <code>.pt</code> checkpoint and the full <code>tokenizer/</code> folder, including <code>tokenizer.json</code>. The checkpoint may be at the archive root or inside one folder. Maximum package size: 2 GB.</p><form id="va-upload-form"><label class="field">New model version<input name="version" required minlength="3" maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,79}" placeholder="roberta_va_regression_v2"></label><label class="field">Model package (.zip or .rar)<input name="package" type="file" accept=".zip,.rar,application/zip,application/vnd.rar,application/x-rar-compressed" required></label><button class="primary-button" type="submit">Upload and activate</button></form><p>The dashboard stores the candidate, loads it and runs a readiness prediction. If it fails, your active model stays in service. Existing versions are never overwritten.</p>`) + panel('Available model versions', `<p>Stored means the files are on disk. Only Active means the model is loaded for inference. You can activate a stored version from this list.</p>${table(['Version', 'Checkpoint', 'Tokenizer', 'State', 'Action'], (catalog.items || []).map(item => {
         const version = item.modelVersion ?? item.model_version
         const tokenizerAvailable = item.tokenizerAvailable ?? item.tokenizer_available
         const active = version === runtime.modelVersion || version === runtime.model_version
-        return `<tr>${cell(version)}${cell(item.checkpoint)}${cell(tokenizerAvailable ? 'Available' : 'Missing')}${cell(active ? 'Active' : 'Available')}<td>${active ? '<strong>Active</strong>' : button('Activate', `data-va-activate="${esc(version)}"`)}</td></tr>`
+        return `<tr>${cell(version)}${cell(item.checkpoint)}${cell(tokenizerAvailable ? 'Available' : 'Missing')}${cell(active ? 'Active' : 'Stored')}<td>${active ? '<strong>Active</strong>' : button('Activate', `data-va-activate="${esc(version)}"`)}</td></tr>`
       }))}`))
       const uploadForm = host.querySelector('#va-upload-form')
       uploadForm?.addEventListener('submit', async event => {
@@ -81,14 +82,20 @@ export async function mountAiWorkspace(host, tab, user, mountModels) {
           submit.textContent = 'Upload and activate'
         }
       })
+      on('[data-va-activate]', async b => {
+        const version = b.dataset.vaActivate
+        if (!window.confirm(`Load and activate ${version}? New user analyses will use it.`)) return
+        await request('/Models/va/activate', { method: 'POST', body: JSON.stringify({ version }) })
+        await reload()
+      })
     } else if (tab === 'viModels') {
       const data = await request('/Models/vi')
       const runtime = data.runtime || {}
       const catalog = data.catalog || {}
-      render(panel('Upload a Vietnamese PhoBERT model', `<p>This is a separate Vietnamese classifier. It requires one PhoBERT sequence-classification bundle with <code>config.json</code>, <code>model.safetensors</code> (or <code>pytorch_model.bin</code>), <code>tokenizer_config.json</code>, <code>vocab.txt</code>, and <code>bpe.codes</code>. ZIP or RAR, maximum 2 GB. If training used custom emoji/teencode dictionaries, include <code>preprocessing.json</code> beside the model files so serving uses the same normalization.</p><form id="vi-upload-form"><label class="field">New Vietnamese model version<input name="version" required minlength="3" maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,79}" placeholder="phobert_vsmec_v2"></label><label class="field">PhoBERT package (.zip or .rar)<input name="package" type="file" accept=".zip,.rar,application/zip,application/vnd.rar,application/x-rar-compressed" required></label><button class="primary-button" type="submit">Upload and activate Vietnamese</button></form><p>Vietnamese candidates are stored and activated independently. Uploading or activating one never replaces the English model.</p>`) + panel('Vietnamese model runtime', `<p>Status: <strong>${esc(runtime.status || 'unavailable')}</strong> · Active version: <strong>${esc(runtime.modelVersion || 'None')}</strong> · Device: ${esc(runtime.inferenceDevice || '—')} · Language: vi</p>`) + panel('Available Vietnamese versions', `<p>Only Vietnamese PhoBERT candidates appear in this list.</p>${table(['Version', 'Checkpoint', 'Tokenizer', 'State', 'Action'], (catalog.items || []).map(item => {
+      render(panel('Upload a Vietnamese PhoBERT model', `<p>This is a separate Vietnamese classifier. It requires one PhoBERT sequence-classification bundle with <code>config.json</code>, <code>model.safetensors</code> (or <code>pytorch_model.bin</code>), <code>tokenizer_config.json</code>, <code>vocab.txt</code>, and <code>bpe.codes</code>. ZIP or RAR, maximum 2 GB. If training used custom emoji/teencode dictionaries, include <code>preprocessing.json</code> beside the model files so serving uses the same normalization.</p><form id="vi-upload-form"><label class="field">New Vietnamese model version<input name="version" required minlength="3" maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,79}" placeholder="phobert_vsmec_v2"></label><label class="field">PhoBERT package (.zip or .rar)<input name="package" type="file" accept=".zip,.rar,application/zip,application/vnd.rar,application/x-rar-compressed" required></label><button class="primary-button" type="submit">Upload and activate Vietnamese</button></form><p>Vietnamese candidates are stored and activated independently. Uploading or activating one never replaces the English model.</p>`) + panel('Vietnamese model runtime', `<p>Status: <strong>${esc(runtime.status || 'unavailable')}</strong> · Active version: <strong>${esc(runtime.modelVersion || 'None')}</strong> · Device: ${esc(runtime.inferenceDevice || '—')} · Language: vi</p>`) + panel('Available Vietnamese versions', `<p>Stored means the files are on disk, even if an earlier activation failed. Only Active means PhoBERT is loaded and ready.</p>${table(['Version', 'Checkpoint', 'Tokenizer', 'State', 'Action'], (catalog.items || []).map(item => {
         const version = item.modelVersion ?? item.model_version
         const active = version === runtime.modelVersion || version === catalog.activeVersion
-        return `<tr>${cell(version)}${cell(item.checkpoint)}${cell((item.tokenizerAvailable ?? item.tokenizer_available) ? 'Available' : 'Missing')}${cell(active ? 'Active' : 'Available')}<td>${active ? '<strong>Active</strong>' : button('Activate', `data-vi-activate="${esc(version)}"`)}</td></tr>`
+        return `<tr>${cell(version)}${cell(item.checkpoint)}${cell((item.tokenizerAvailable ?? item.tokenizer_available) ? 'Available' : 'Missing')}${cell(active ? 'Active' : 'Stored')}<td>${active ? '<strong>Active</strong>' : button('Activate', `data-vi-activate="${esc(version)}"`)}</td></tr>`
       }))}`))
       const uploadForm = host.querySelector('#vi-upload-form')
       uploadForm?.addEventListener('submit', async event => {
@@ -114,12 +121,6 @@ export async function mountAiWorkspace(host, tab, user, mountModels) {
         const version = b.dataset.viActivate
         if (!window.confirm(`Activate Vietnamese model ${version}? The English model will stay unchanged.`)) return
         await request('/Models/vi/activate', { method: 'POST', body: JSON.stringify({ version }) })
-        await reload()
-      })
-      on('[data-va-activate]', async b => {
-        const version = b.dataset.vaActivate
-        if (!window.confirm(`Load and activate ${version}? New user analyses will use it.`)) return
-        await request('/Models/va/activate', { method: 'POST', body: JSON.stringify({ version }) })
         await reload()
       })
     } else if (tab === 'aiOverview') {

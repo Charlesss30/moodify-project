@@ -68,7 +68,7 @@ public sealed class ExternalCatalog(MongoStore db, IHttpClientFactory clients, I
         var data=await new TmdbClient(clients.CreateClient("Tmdb"),config).Lookup(item.NoiDungID[5..],ct)
             ?? throw new InvalidOperationException("Movie is unavailable on TMDB.");
         item.TieuDe=data.Title;item.MoTa=data.Description;item.HinhAnh=data.Poster;
-        item.Phim=new Phim {NoiDungID=item.NoiDungID,IMDBID=data.ImdbId,TMDBID=data.TmdbId,Director=data.Director,TheLoai=data.Genre,DiemDanhGiaTB=data.Rating,RatingSource="TMDB",MetadataSource="TMDB",TrailerUrl=data.TrailerUrl,MoodSource="unassigned"};
+        item.Phim=new Phim {NoiDungID=item.NoiDungID,IMDBID=data.ImdbId,TMDBID=data.TmdbId,Director=data.Director,ReleaseYear=int.TryParse(data.Year,out var year)?year:null,RuntimeMinutes=data.RuntimeMinutes,Cast=data.Cast??[],TheLoai=data.Genre,DiemDanhGiaTB=data.Rating,RatingSource="TMDB",MetadataSource="TMDB",TrailerUrl=data.TrailerUrl,MoodSource="unassigned"};
         var suggestion=await new GenreMoodService(db).Suggest(item.Phim.TheLoai,"Movie");
         if(suggestion.Valence.HasValue){item.Valence=suggestion.Valence.Value;item.Arousal=suggestion.Arousal!.Value;item.MoodAvailable=true;item.Phim.MoodSource="genre-default";item.MoodRuleVersion=suggestion.RuleVersion;}
     }

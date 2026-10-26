@@ -15,6 +15,9 @@ using mood_recommendation.Services;
 
 var root = Environment.GetEnvironmentVariable("MOODIFY_TEST_ROOT") ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../"));
 var original=Environment.GetEnvironmentVariable("MONGO_URI") ?? "mongodb://127.0.0.1:27017";
+if (args.Contains("--firebase-contract")) { Console.WriteLine($"PASS: {FirebaseClaimTests.Run()} Firebase verified-claim assertions (no network or database).");return; }
+if (args.Contains("--service-check")) { await ServiceConfigurationCheck.Run(root);return; }
+if (args.Contains("--tmdb-contract")) { Console.WriteLine($"PASS: {await TmdbTests.Run()} TMDB contract assertions (no database).");return; }
 if (args.Contains("--tmdb-live")) { await TmdbTests.Live(root);return; }
 if (args.Contains("--live-read")) { await MongoReadCheck.Run(original);return; }
 if (args.Contains("--browser-smoke")) { await BrowserSmoke.Run(root,original);return; }
@@ -32,6 +35,7 @@ void Check(bool condition, string message) { if (!condition) throw new Exception
 try
 {
     await db.Initialize(Path.Combine(root,"backend/Data/mongo-schema.json"));
+    checks += FirebaseClaimTests.Run();
     checks += await FeatureTests.Run();
     checks += await TmdbTests.Run();
     checks += await SpotifyTests.Run(db);
@@ -55,6 +59,15 @@ try
     start.Environment["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}";
     start.Environment["Mongo__ConnectionString"] = original;
     start.Environment["Mongo__Database"] = database;
+    start.Environment["Testing__Enabled"]="true";
+    start.Environment["Email__Host"]="";
+    start.Environment["Email__Username"]="";
+    start.Environment["Email__Password"]="";
+    start.Environment["Email__From"]="moodify@test.invalid";
+    start.Environment["Email__PickupDirectory"]=Path.Combine(root,".local-build","recovery-mail",database);
+    start.Environment["Firebase__ProjectId"]="";
+    start.Environment["Firebase__ServiceAccountPath"]="";
+
     start.Environment["Jwt__Key"] = key;
     start.Environment["Spotify__ClientId"] = "";
     start.Environment["Tmdb__AccessToken"] = "";
@@ -468,6 +481,15 @@ try
     start.Environment["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}";
     start.Environment["Mongo__ConnectionString"] = original;
     start.Environment["Mongo__Database"] = database;
+    start.Environment["Testing__Enabled"]="true";
+    start.Environment["Email__Host"]="";
+    start.Environment["Email__Username"]="";
+    start.Environment["Email__Password"]="";
+    start.Environment["Email__From"]="moodify@test.invalid";
+    start.Environment["Email__PickupDirectory"]=Path.Combine(root,".local-build","recovery-mail",database);
+    start.Environment["Firebase__ProjectId"]="";
+    start.Environment["Firebase__ServiceAccountPath"]="";
+
     start.Environment["Jwt__Key"] = key;
     start.Environment["Spotify__ClientId"] = "";
     start.Environment["Omdb__ApiKey"] = "";
@@ -555,6 +577,10 @@ try
     await Call("POST", "/Movies", new {noiDungID="bad-trailer",tieuDe="Bad",trailerUrl="https://evil.test/watch?v=12345678901"},400,at);
     await Call("POST", "/Movies", new {noiDungID="good-trailer",tieuDe="Trailer",valence=0,arousal=0,moodSource="manual",trailerUrl="https://www.youtube.com/watch?v=12345678901"},201,at);
     Check((await Call("GET","/Movies/good-trailer",null,200,ut))!["phim"]!["trailerUrl"]!.GetValue<string>().Contains("12345678901"),"Trailer URL not persisted.");
+    await StatisticsTests.Run(db, Call, Check, user.TaiKhoanID, ut, ot);
+    await PersonalLibraryTests.Run(db, Call, Check, user.TaiKhoanID, ut, ot);
+    await MobileCompletionTests.Run(db, Call, Check, user.TaiKhoanID, ut, ot, at);
+    await AuthNotificationTests.Run(db, Call, Check, root, database, user.TaiKhoanID, ut, ot);
     Console.WriteLine($"PASS: {checks} HTTP and business assertions on an isolated MongoDB database.");
 }
 finally
