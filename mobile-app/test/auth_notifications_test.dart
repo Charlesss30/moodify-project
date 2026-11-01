@@ -10,6 +10,7 @@ import 'package:moodify_application/screens/login_screen.dart';
 import 'package:moodify_application/screens/notification_settings_screen.dart';
 import 'package:moodify_application/services/auth/google_auth_service.dart';
 import 'package:moodify_application/services/notifications/push_notifications.dart';
+import 'package:moodify_application/services/notifications/system_notifications.dart';
 
 http.Response json(Object body, [int status = 200]) => http.Response(
   jsonEncode(body),
@@ -54,11 +55,21 @@ class FakePushClient implements PushRegistrationClient {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   final originalToken = GoogleAuthService.tokenProvider;
   final originalPush = PushNotifications.client;
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  setUp(() {
+    messenger.setMockMethodCallHandler(
+      SystemNotifications.channel,
+      (_) async => null,
+    );
+  });
   tearDown(() async {
     ApiService.logout();
     await PushNotifications.endSession();
+    messenger.setMockMethodCallHandler(SystemNotifications.channel, null);
     ApiService.clientFactory = http.Client.new;
     ApiService.onUnauthorized = null;
     GoogleAuthService.tokenProvider = originalToken;

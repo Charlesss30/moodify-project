@@ -23,9 +23,10 @@ public class HistoryController(MongoStore db, ExternalCatalog external) : Contro
         var names=(await db.TamTrangs.Where(x=>moodIds.Contains(x.TamTrangID)).ToListAsync()).ToDictionary(x=>x.TamTrangID,x=>x.TenTamTrang);
         return Ok(new { total=await query.CountAsync(),page,pageSize=50,items=pageItems.Select(x=>new {
             x.LichSuID,x.RecommendationId,x.TamTrangID,tenTamTrang=names.GetValueOrDefault(x.TamTrangID),
-            x.ThoiGian,x.Valence,x.Arousal,x.VanBanDauVao,x.RecommendedItems,x.Algorithm,x.Source,
+            x.ThoiGian,x.Valence,x.Arousal,x.VanBanDauVao,x.RecommendedItems,x.Algorithm,x.CollaborativeModelVersion,x.ExperimentId,x.StrategyArm,x.Source,
             x.AnalysisId,x.AnalyzerVersion,x.MappingVersion,x.AnalysisSource,x.DecisionSource,
-            x.MoodConfigHash,x.AnalysisExpiresAt
+            x.MoodConfigHash,x.AnalysisExpiresAt,x.AnalysisLanguage,x.AnalysisModelType,x.RoutingVersion,
+            x.AnalysisValence,x.AnalysisArousal
         }) });
     }
     [HttpGet("ratings")]

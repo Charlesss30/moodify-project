@@ -13,21 +13,31 @@ namespace mood_recommendation.Controllers;
 public class RecommendationController(
     MongoStore db,
     ExternalCatalog external,
-    MoodAnalysisService analysisService) : ControllerBase
+    MoodAnalysisService analysisService, BilingualMoodAnalysisService bilingual, MatrixFactorizationService mf, RecommendationStrategyService strategy,
+    ILogger<RecommendationController> logger) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Recommend(RecommendationDto dto)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        if (dto.Valence.HasValue != dto.Arousal.HasValue
-            || (dto.Source == "ai_va" && (!dto.Valence.HasValue || !dto.Arousal.HasValue || string.IsNullOrWhiteSpace(dto.ModelVersion))))
-            return BadRequest(new { message = "AI VA recommendations require both valence and arousal in the range -1 to 1." });
+        Response.Headers.CacheControl = "no-store";
+        var isBilingual = dto.Source == "ai_va" || dto.AnalysisId?.StartsWith("va_", StringComparison.Ordinal) == true;
+        if (dto.Valence.HasValue != dto.Arousal.HasValue)
+            return BadRequest(new { message = "Provide both coordinates or neither." });
+        if (isBilingual && (string.IsNullOrWhiteSpace(dto.AnalysisId)
+            || dto.Valence.HasValue || dto.Arousal.HasValue || dto.ModelVersion is not null))
+            return BadRequest(new { message = "Use the server-issued analysisId; do not send client VA or modelVersion." });
         var mood=await db.Find<TamTrang>(dto.TamTrangID);
         if(mood==null)return NotFound(new {message="Mood not found."});
         var requestHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
             System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { dto.TamTrangID, dto.Valence, dto.Arousal, dto.Source, dto.ModelVersion, dto.LoaiNoiDung, dto.Limit, dto.Balanced, dto.Mode }))));
-        var mappingVersion = string.IsNullOrWhiteSpace(dto.AnalysisId) ? null
-            : (await analysisService.GetMappingAsync(HttpContext.RequestAborted)).Version;
+        await using var vaLease = isBilingual
+            ? await bilingual.ReserveAsync(dto.AnalysisId!, userId, dto.TamTrangID, dto.Source, HttpContext.RequestAborted) : null;
+        if (isBilingual && vaLease is null)
+            return Conflict(new { message = "Kết quả AI hết hạn, đang xử lý hoặc model/tâm trạng đã thay đổi. Hãy phân tích lại hoặc chọn tâm trạng thủ công." });
+        var receipt = vaLease?.Receipt;
+        var mappingVersion = receipt?.MappingVersion ?? (string.IsNullOrWhiteSpace(dto.AnalysisId) ? null
+            : (await analysisService.GetMappingAsync(HttpContext.RequestAborted)).Version);
         var moodConfigurationHash = MoodAnalysisService.MoodConfigurationHash(mood);
         if (!string.IsNullOrWhiteSpace(dto.AnalysisId))
         {
@@ -46,14 +56,18 @@ public class RecommendationController(
             }
         }
         using var reservation = analysisService.TryReserveRecommendation(
-            dto.AnalysisId, userId, dto.TamTrangID, moodConfigurationHash, requestHash, mappingVersion);
+            isBilingual ? null : dto.AnalysisId, userId, dto.TamTrangID, moodConfigurationHash, requestHash, mappingVersion);
         if (reservation is null)
             return Conflict(new { message = "This analysis is invalid, expired, belongs to another account, or is already being processed." });
         if (reservation.CachedResponse is not null) return Ok(reservation.CachedResponse);
-        var provenance = reservation.Provenance;
+        var provenance = receipt is null ? reservation.Provenance
+            : new AnalysisProvenance(receipt.Id, receipt.ModelVersion, receipt.MappingVersion, receipt.ExpiresAt,
+                moodConfigurationHash, "ai_va", dto.Source);
 
-        var v=dto.Valence ?? (mood.MinValence+mood.MaxValence)/2;
-        var a=dto.Arousal ?? (mood.MinArousal+mood.MaxArousal)/2;
+        var target = receipt is not null && dto.Source == "ai_va"
+            ? SemanticMoodMapper.Project(receipt.Valence, receipt.Arousal, mood) : ((decimal,decimal)?)null;
+        var v=target?.Item1 ?? dto.Valence ?? (mood.MinValence+mood.MaxValence)/2;
+        var a=target?.Item2 ?? dto.Arousal ?? (mood.MinArousal+mood.MaxArousal)/2;
         var query=db.NoiDungGiaiTris;
         if(dto.LoaiNoiDung=="Movie")query=query.Where(x=>x.LoaiNoiDung=="Movie");
         if(dto.LoaiNoiDung=="Music")query=query.Where(x=>x.LoaiNoiDung=="Song");
@@ -70,17 +84,22 @@ public class RecommendationController(
         // ID-only songs have no trustworthy mood label; never substitute fake zero coordinates.
         var candidates = items.Concat(remote.Where(x=>x.MoodAvailable && x.MetadataStatus=="available"))
             .OrderBy(x=>MoodScoring.DistanceSquared(x.Valence,x.Arousal,v,a)).ThenBy(x=>x.NoiDungID);
+        var choice=dto.Mode=="hybrid"?await strategy.ChooseAsync(userId,mood.TamTrangID,HttpContext.RequestAborted)
+            :new StrategyChoice(null,"baseline","baseline",1,1,new HybridWeights());
         IReadOnlyList<RankedContent>? personalized = null;
-        if (dto.Mode != "mood") personalized = await new HybridRecommender(db).RankAsync(candidates.ToList(), userId, v, a, dto.Mode);
+        if (dto.Mode != "mood") personalized = await new HybridRecommender(db,mf).RankAsync(candidates.ToList(), userId, v, a, dto.Mode,choice.Weights);
         var ordered = personalized is null ? candidates.AsEnumerable() : personalized.Select(x => x.Content);
         items = balanced
             ? ordered.Where(x=>x.LoaiNoiDung=="Movie").Take((dto.Limit+1)/2)
                 .Concat(ordered.Where(x=>x.LoaiNoiDung=="Song").Take(dto.Limit/2)).ToList()
             : ordered.Take(dto.Limit).ToList();
         var algorithm = dto.Mode == "mood" ? "mood-euclidean-v1" : dto.Mode == "content" ? "content-feedback-v1" : "hybrid-feedback-v1";
+        var mfVersion = personalized?.FirstOrDefault(x=>x.CollaborativeVersion is not null)?.CollaborativeVersion;
+        if(mfVersion is not null && dto.Mode=="hybrid") algorithm="hybrid-mf-feedback-v1";
         var ranking = personalized?.ToDictionary(x => x.Content.NoiDungID);
         var recommendationId = Guid.NewGuid().ToString("N");
-        var response = new {recommendationId,algorithm,mood=mood.TenTamTrang,valence=v,arousal=a,
+        var response = new {recommendationId,algorithm,collaborativeModelVersion=mfVersion,experimentId=choice.ExperimentId,experimentGroup=choice.Group,strategyArm=choice.Arm,mood=mood.TenTamTrang,valence=v,arousal=a,
+            analysisValence=receipt?.Valence,analysisArousal=receipt?.Arousal,mappingVersion=receipt?.MappingVersion,
             items=items.Select(x=>new {content=new{recommendationId,x.NoiDungID,x.TieuDe,x.LoaiNoiDung,x.HinhAnh,x.MoTa,x.Valence,x.Arousal,
                 director=x.Phim?.Director,artist=x.Nhac?.TenNgheSi,duration=x.Nhac?.Duration,album=x.Nhac?.Album,canPreview=false,playbackMode=x.Nhac?.Source=="Spotify"?"embed":null,sourceUrl=x.Nhac?.SourceUrl},
                 score=ranking?.GetValueOrDefault(x.NoiDungID)?.Score,
@@ -90,8 +109,10 @@ public class RecommendationController(
         var responseJson = JsonSerializer.Serialize(response, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var history = new LichSuTamTrang{RecommendationId=recommendationId,TaiKhoanID=userId,TamTrangID=mood.TamTrangID,Valence=v,Arousal=a,ThoiGian=DateTime.UtcNow,
             Source=provenance?.DecisionSource ?? dto.Source,
-            AnalyzerVersion=dto.Source == "ai_va" ? dto.ModelVersion : provenance?.ModelVersion,
-            Algorithm=algorithm,
+            AnalyzerVersion=provenance?.ModelVersion,
+            AnalysisLanguage=receipt?.Language, AnalysisModelType=receipt?.ModelType, RoutingVersion=receipt?.RoutingVersion,
+            AnalysisValence=receipt?.Valence, AnalysisArousal=receipt?.Arousal,
+            Algorithm=algorithm,CollaborativeModelVersion=mfVersion,ExperimentId=choice.ExperimentId,StrategyArm=choice.Arm,
             AnalysisId=provenance?.AnalysisId,
             MappingVersion=provenance?.MappingVersion,AnalysisSource=provenance?.AnalysisSource,
             MoodConfigHash=moodConfigurationHash,AnalysisExpiresAt=provenance?.ExpiresAt,
@@ -117,6 +138,8 @@ public class RecommendationController(
                 return Content(previous.RecommendationResponseJson, "application/json");
             throw;
         }
+        try { await strategy.LogAsync(recommendationId,userId,mood.TamTrangID,choice,HttpContext.RequestAborted); }
+        catch(Exception error) when(error is not OperationCanceledException) { logger.LogWarning("Recommendation experiment logging failed ({Type}).",error.GetType().Name); }
         reservation.Complete(response, mood.TamTrangID, requestHash);
         return Ok(response);
     }

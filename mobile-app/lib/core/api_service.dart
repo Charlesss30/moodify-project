@@ -9,6 +9,19 @@ import '../models/personal_models.dart';
 import '../models/session_user.dart';
 import '../services/mood_analysis/mood_analyzer.dart';
 
+class ApiRequestCancelled implements Exception {
+  const ApiRequestCancelled();
+}
+
+class ApiRequestCancellation {
+  final _signal = Completer<void>();
+  bool get isCancelled => _signal.isCompleted;
+  Future<void> get whenCancelled => _signal.future;
+  void cancel() {
+    if (!_signal.isCompleted) _signal.complete();
+  }
+}
+
 class ApiException implements Exception {
   const ApiException(this.message, {this.statusCode});
 
@@ -65,6 +78,7 @@ class ApiService {
     String method = 'GET',
     Map<String, dynamic>? body,
     bool authenticated = true,
+    ApiRequestCancellation? cancellation,
   }) async {
     final request = http.Request(method, Uri.parse('$baseUrl/api$path'));
     final sessionVersion = _sessionVersion;
@@ -79,9 +93,24 @@ class ApiService {
       request.headers['Authorization'] = 'Bearer $_token';
     }
     try {
-      final response = await (() async => http.Response.fromStream(
-        await client.send(request),
-      ))().timeout(requestTimeout);
+      if (cancellation?.isCancelled == true) {
+        throw const ApiRequestCancelled();
+      }
+      final pending = (() async =>
+          http.Response.fromStream(await client.send(request)))();
+      final response =
+          await (cancellation == null
+                  ? pending
+                  : Future.any<http.Response>([
+                      pending,
+                      cancellation.whenCancelled.then<http.Response>(
+                        (_) => throw const ApiRequestCancelled(),
+                      ),
+                    ]))
+              .timeout(requestTimeout);
+      if (cancellation?.isCancelled == true) {
+        throw const ApiRequestCancelled();
+      }
       if (authenticated && sessionVersion != _sessionVersion) {
         throw const ApiException('Phiên đăng nhập đã thay đổi.');
       }
@@ -295,16 +324,8 @@ class ApiService {
     bool balanced = false,
   }) async {
     if (source == 'ai_va' &&
-        (valence == null ||
-            !valence.isFinite ||
-            valence < -1 ||
-            valence > 1 ||
-            arousal == null ||
-            !arousal.isFinite ||
-            arousal < -1 ||
-            arousal > 1 ||
-            modelVersion == null ||
-            modelVersion.isEmpty)) {
+        (analysisId == null ||
+            !RegExp(r'^va_[a-f0-9]{32}$').hasMatch(analysisId))) {
       throw const ApiException('Thiếu kết quả AI hợp lệ. Hãy phân tích lại.');
     }
     final result = RecommendationResult.fromJson(
@@ -320,10 +341,12 @@ class ApiService {
             'source': source,
             'mode': mode,
             'analysisId': analysisId,
-            if (source == 'ai_va') ...{
+            // AI coordinates and model identity are loaded from the server receipt.
+            if (source == 'rule_based' &&
+                valence != null &&
+                arousal != null) ...{
               'valence': valence,
               'arousal': arousal,
-              'modelVersion': modelVersion,
             },
           },
         ),
@@ -336,9 +359,10 @@ class ApiService {
 
   static Future<MoodAnalysisResult> analyzeMood(
     String text, {
-    required String language,
+    String language = 'auto',
+    ApiRequestCancellation? cancellation,
   }) async {
-    if (language != 'vi' && language != 'en') {
+    if (language != 'auto' && language != 'vi' && language != 'en') {
       throw const ApiException('Hãy chọn tiếng Việt hoặc tiếng Anh.');
     }
     if (text.trim().isEmpty) {
@@ -351,11 +375,16 @@ class ApiService {
           '/MoodAnalysis/valence-arousal',
           method: 'POST',
           body: {'text': text.trim(), 'language': language},
+          cancellation: cancellation,
         ),
       );
     } on ApiException catch (error) {
       if (error.statusCode == 503) {
-        final modelLanguage = language == 'vi' ? 'tiếng Việt' : 'tiếng Anh';
+        final modelLanguage = language == 'auto'
+            ? 'Việt/Anh'
+            : language == 'vi'
+            ? 'tiếng Việt'
+            : 'tiếng Anh';
         throw ApiException(
           'Model $modelLanguage chưa sẵn sàng. Hãy thử lại sau hoặc chọn tâm trạng thủ công.',
           statusCode: 503,

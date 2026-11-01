@@ -1,7 +1,8 @@
+import { mountPolicyTools, mountTypedTools, mountFactorizationTools, mountLifecycleTools, mountInferenceMetrics, mountRecommendationExperiments, mountQualityTools } from './ai-tools.js'
 import { request } from './api.js'
 import { enhanceList } from './list-controls.js'
 
-export const aiTabs = { aiOverview: 'AI overview', vaModels: 'English valence/arousal', viModels: 'Vietnamese PhoBERT', models: 'Emotion classifier', aiMapping: 'Emotion mapping', aiEvaluation: 'Evaluation', aiDatasets: 'Datasets', aiTraining: 'Training jobs', aiFeedback: 'Feedback analytics', aiTest: 'Inference lab', aiAudit: 'Audit log' }
+export const aiTabs = { aiOverview: 'AI overview', vaModels: 'English valence/arousal', viModels: 'Vietnamese PhoBERT', models: 'Emotion classifier', aiMapping: 'GoEmotions mapping', aiEvaluation: 'Evaluation', aiDatasets: 'Datasets', aiTraining: 'Training jobs', aiFeedback: 'Feedback analytics', aiTest: 'Inference lab', aiAudit: 'Audit log' }
 const esc = (v = '') => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 const date = v => new Date(v).toLocaleString('en-US')
 const table = (heads, rows) => `<div class="table-scroll"><table><thead><tr>${heads.map(v => `<th>${esc(v)}</th>`).join('')}</tr></thead><tbody>${rows.join('') || '<tr><td colspan="8">No records yet.</td></tr>'}</tbody></table></div>`
@@ -35,13 +36,28 @@ export async function mountAiWorkspace(host, tab, user, mountModels) {
   })
   try {
     // Existing registry actions retain their server permissions, CAS revisions and audit.
-    const sections = { aiMapping: ['Approve emotion-to-mood mapping', 'Local content coverage'], aiEvaluation: ['Offline evaluation'], aiTest: ['Test English text'], aiAudit: ['Registry audit (latest 100)'] }
+    const sections = { aiMapping: ['Approve emotion-to-mood mapping', 'Local content coverage'], aiEvaluation: ['Offline evaluation'], aiAudit: ['Registry audit (latest 100)'] }
+    if (tab === 'aiTest') {
+      const pipelines = await request('/AiWorkspace/pipelines')
+      render(panel('Bilingual app pipeline', `<p>Uses the same authenticated API and backend routing as Mobile/Web. No recommendation or history is created by this preview.</p><p>AI enabled: <strong>${esc(pipelines.enabled)}</strong> · Routing: ${esc(pipelines.routingVersion)}</p><form id="bilingual-test"><label class="field">Vietnamese or English description<textarea name="text" required maxlength="4000" rows="4" placeholder="Tôi thấy bình yên / I feel peaceful today"></textarea></label><button class="primary-button" type="submit">Analyze automatically</button></form><pre id="bilingual-output" aria-live="polite"></pre>`) + panel('Policy scope', `<p>${esc(pipelines.legacyMappingScope)}</p>${table(['Language', 'Model output', 'VA policy', 'Limitation'], pipelines.policies.map(p => '<tr>' + cell(p.language) + cell(p.modelType) + cell(p.mappingVersion) + cell(p.limitation) + '</tr>'))}`))
+      form('#bilingual-test', async values => {
+        const started = performance.now()
+        const output = host.querySelector('#bilingual-output')
+        const result = await request('/MoodAnalysis/valence-arousal', { method: 'POST', body: JSON.stringify({ text: values.text, language: 'auto' }) })
+        if (!output?.isConnected) return
+        output.textContent = JSON.stringify({ ...result, latencyMs: Math.round(performance.now() - started) }, null, 2)
+      })
+      on('[data-refresh]', reload)
+      return
+    }
     if (sections[tab]) {
       await mountModels(host, 'models', user, 1, '', tab)
       const heading = host.querySelector('h1')
       if (heading) heading.textContent = aiTabs[tab]
       host.querySelectorAll('section.panel').forEach(p => { p.hidden = !sections[tab].includes(p.querySelector('h2')?.textContent) })
+      if (tab === 'aiMapping') await mountPolicyTools(host)
       if (tab === 'aiEvaluation') {
+        await mountTypedTools(host, tab)
         const jobs = await request('/AiWorkspace/jobs')
         const result = document.createElement('section'); result.className = 'panel'
         result.innerHTML = '<h2>Submitted training results</h2><p>Compare runs only when dataset hash and test split match. Submitted metrics are not verified deployment results.</p>' + table(['Version', 'Dataset hash', 'Micro-F1', 'Macro-F1', 'Test samples', 'State'], jobs.filter(j => j.report).map(j => '<tr>' + cell(j.modelVersion) + cell(j.datasetHash) + cell(j.report.microF1) + cell(j.report.macroF1) + cell(j.report.testSamples) + cell(j.status) + '</tr>'))
@@ -54,7 +70,7 @@ export async function mountAiWorkspace(host, tab, user, mountModels) {
       const runtime = data.runtime || {}
       const catalog = data.catalog || {}
       const runtimePanel = panel('Valence/arousal runtime', `<p>Status: <strong>${esc(runtime.status || 'unavailable')}</strong> · Active version: <strong>${esc(runtime.modelVersion || 'None')}</strong> · Device: ${esc(runtime.inferenceDevice || '—')}</p>`)
-      render(runtimePanel + panel('Upload a valence/arousal model', `<p>Create a ZIP or RAR containing one <code>.pt</code> checkpoint and the full <code>tokenizer/</code> folder, including <code>tokenizer.json</code>. The checkpoint may be at the archive root or inside one folder. Maximum package size: 2 GB.</p><form id="va-upload-form"><label class="field">New model version<input name="version" required minlength="3" maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,79}" placeholder="roberta_va_regression_v2"></label><label class="field">Model package (.zip or .rar)<input name="package" type="file" accept=".zip,.rar,application/zip,application/vnd.rar,application/x-rar-compressed" required></label><button class="primary-button" type="submit">Upload and activate</button></form><p>The dashboard stores the candidate, loads it and runs a readiness prediction. If it fails, your active model stays in service. Existing versions are never overwritten.</p>`) + panel('Available model versions', `<p>Stored means the files are on disk. Only Active means the model is loaded for inference. You can activate a stored version from this list.</p>${table(['Version', 'Checkpoint', 'Tokenizer', 'State', 'Action'], (catalog.items || []).map(item => {
+      render(runtimePanel + panel('Upload a valence/arousal model', `<p>Create a ZIP or RAR containing one <code>.pt</code> checkpoint and the full <code>tokenizer/</code> folder, including <code>tokenizer.json</code>. The checkpoint may be at the archive root or inside one folder. Maximum package size: 2 GB.</p><form id="va-upload-form"><label class="field">New model version<input name="version" required minlength="3" maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,79}" placeholder="roberta_va_regression_v2"></label><label class="field">Model package (.zip or .rar)<input name="package" type="file" accept=".zip,.rar,application/zip,application/vnd.rar,application/x-rar-compressed" required></label><button class="primary-button" type="submit">Upload candidate</button></form><p>The dashboard stores the candidate without activation. Readiness and reviewed quality approval are separate steps. Existing versions are never overwritten.</p>`) + panel('Available model versions', `<p>Stored means the files are on disk. Only Active means the model is loaded for inference. You can activate a stored version from this list.</p>${table(['Version', 'Checkpoint', 'Tokenizer', 'State', 'Action'], (catalog.items || []).map(item => {
         const version = item.modelVersion ?? item.model_version
         const tokenizerAvailable = item.tokenizerAvailable ?? item.tokenizer_available
         const active = version === runtime.modelVersion || version === runtime.model_version
@@ -70,29 +86,30 @@ export async function mountAiWorkspace(host, tab, user, mountModels) {
           error(new Error('The ZIP or RAR package must be smaller than 2 GB.'))
           return
         }
-        if (!window.confirm(`Upload and activate ${uploadForm.elements.version.value}? This will switch new user analyses to this model.`)) return
+        if (!window.confirm(`Upload candidate ${uploadForm.elements.version.value}? This stores a candidate; activation requires reviewed quality evidence.`)) return
         submit.disabled = true
         submit.textContent = 'Uploading and loading model…'
         try {
-          await request('/Models/va/upload-and-activate', { method: 'POST', body: new FormData(uploadForm) })
+          await request('/Models/va/upload', { method: 'POST', body: new FormData(uploadForm) })
           await reload()
         } catch (e) {
           error(e)
           submit.disabled = false
-          submit.textContent = 'Upload and activate'
+          submit.textContent = 'Upload candidate'
         }
       })
       on('[data-va-activate]', async b => {
         const version = b.dataset.vaActivate
         if (!window.confirm(`Load and activate ${version}? New user analyses will use it.`)) return
-        await request('/Models/va/activate', { method: 'POST', body: JSON.stringify({ version }) })
+        const lifecycle = await request('/ModelLifecycle/va')
+        await request('/ModelLifecycle/va/activate', { method: 'POST', body: JSON.stringify({ version, expectedRevision: lifecycle.revision }) })
         await reload()
       })
     } else if (tab === 'viModels') {
       const data = await request('/Models/vi')
       const runtime = data.runtime || {}
       const catalog = data.catalog || {}
-      render(panel('Upload a Vietnamese PhoBERT model', `<p>This is a separate Vietnamese classifier. It requires one PhoBERT sequence-classification bundle with <code>config.json</code>, <code>model.safetensors</code> (or <code>pytorch_model.bin</code>), <code>tokenizer_config.json</code>, <code>vocab.txt</code>, and <code>bpe.codes</code>. ZIP or RAR, maximum 2 GB. If training used custom emoji/teencode dictionaries, include <code>preprocessing.json</code> beside the model files so serving uses the same normalization.</p><form id="vi-upload-form"><label class="field">New Vietnamese model version<input name="version" required minlength="3" maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,79}" placeholder="phobert_vsmec_v2"></label><label class="field">PhoBERT package (.zip or .rar)<input name="package" type="file" accept=".zip,.rar,application/zip,application/vnd.rar,application/x-rar-compressed" required></label><button class="primary-button" type="submit">Upload and activate Vietnamese</button></form><p>Vietnamese candidates are stored and activated independently. Uploading or activating one never replaces the English model.</p>`) + panel('Vietnamese model runtime', `<p>Status: <strong>${esc(runtime.status || 'unavailable')}</strong> · Active version: <strong>${esc(runtime.modelVersion || 'None')}</strong> · Device: ${esc(runtime.inferenceDevice || '—')} · Language: vi</p>`) + panel('Available Vietnamese versions', `<p>Stored means the files are on disk, even if an earlier activation failed. Only Active means PhoBERT is loaded and ready.</p>${table(['Version', 'Checkpoint', 'Tokenizer', 'State', 'Action'], (catalog.items || []).map(item => {
+      render(panel('Upload a Vietnamese PhoBERT model', `<p>This is a separate Vietnamese classifier. It requires one PhoBERT sequence-classification bundle with <code>config.json</code>, <code>model.safetensors</code> (or <code>pytorch_model.bin</code>), <code>tokenizer_config.json</code>, <code>vocab.txt</code>, and <code>bpe.codes</code>. ZIP or RAR, maximum 2 GB. If training used custom emoji/teencode dictionaries, include <code>preprocessing.json</code> beside the model files so serving uses the same normalization.</p><form id="vi-upload-form"><label class="field">New Vietnamese model version<input name="version" required minlength="3" maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,79}" placeholder="phobert_vsmec_v2"></label><label class="field">PhoBERT package (.zip or .rar)<input name="package" type="file" accept=".zip,.rar,application/zip,application/vnd.rar,application/x-rar-compressed" required></label><button class="primary-button" type="submit">Upload Vietnamese candidate</button></form><p>Vietnamese candidates are stored and activated independently. Upload does not activate. Quality approval is required before switching the Vietnamese model; the English pipeline stays separate.</p>`) + panel('Vietnamese model runtime', `<p>Status: <strong>${esc(runtime.status || 'unavailable')}</strong> · Active version: <strong>${esc(runtime.modelVersion || 'None')}</strong> · Device: ${esc(runtime.inferenceDevice || '—')} · Language: vi</p><p>Preprocessing: <strong>${esc(runtime.preprocessingStatus || 'Not reported')}</strong> · SHA-256: ${esc(runtime.preprocessingSha256 || '—')}. Bundled files still require training-parity review.</p>`) + panel('Available Vietnamese versions', `<p>Stored means the files are on disk, even if an earlier activation failed. Only Active means PhoBERT is loaded and ready.</p>${table(['Version', 'Checkpoint', 'Tokenizer', 'State', 'Action'], (catalog.items || []).map(item => {
         const version = item.modelVersion ?? item.model_version
         const active = version === runtime.modelVersion || version === catalog.activeVersion
         return `<tr>${cell(version)}${cell(item.checkpoint)}${cell((item.tokenizerAvailable ?? item.tokenizer_available) ? 'Available' : 'Missing')}${cell(active ? 'Active' : 'Stored')}<td>${active ? '<strong>Active</strong>' : button('Activate', `data-vi-activate="${esc(version)}"`)}</td></tr>`
@@ -105,30 +122,32 @@ export async function mountAiWorkspace(host, tab, user, mountModels) {
         const packageFile = uploadForm.elements.package.files[0]
         if (packageFile.size > 2 * 1024 * 1024 * 1024) { error(new Error('Vietnamese model package must be smaller than 2 GB.')); return }
         const version = uploadForm.elements.version.value
-        if (!window.confirm(`Upload and activate Vietnamese model ${version}? The English model will stay unchanged.`)) return
+        if (!window.confirm(`Upload Vietnamese candidate model ${version}? The English model will stay unchanged.`)) return
         submit.disabled = true
         submit.textContent = 'Uploading and loading PhoBERT…'
         try {
-          await request('/Models/vi/upload-and-activate', { method: 'POST', body: new FormData(uploadForm) })
+          await request('/Models/vi/upload', { method: 'POST', body: new FormData(uploadForm) })
           await reload()
         } catch (e) {
           error(e)
           submit.disabled = false
-          submit.textContent = 'Upload and activate Vietnamese'
+          submit.textContent = 'Upload Vietnamese candidate'
         }
       })
       on('[data-vi-activate]', async b => {
         const version = b.dataset.viActivate
         if (!window.confirm(`Activate Vietnamese model ${version}? The English model will stay unchanged.`)) return
-        await request('/Models/vi/activate', { method: 'POST', body: JSON.stringify({ version }) })
+        const lifecycle = await request('/ModelLifecycle/vi')
+        await request('/ModelLifecycle/vi/activate', { method: 'POST', body: JSON.stringify({ version, expectedRevision: lifecycle.revision }) })
         await reload()
       })
     } else if (tab === 'aiOverview') {
-      const [registry, datasets, jobs, feedback, vaState] = await Promise.all([request('/Models'), request('/AiWorkspace/datasets'), request('/AiWorkspace/jobs'), request('/AiWorkspace/feedback'), request('/Models/va')])
+      const [registry, datasets, jobs, feedback, pipelines] = await Promise.all([request('/Models'), request('/AiWorkspace/datasets'), request('/AiWorkspace/jobs'), request('/AiWorkspace/feedback'), request('/AiWorkspace/pipelines')])
       const r = registry.runtime || {}
-      const va = vaState.runtime || {}
-      const stats = [['VA model runtime', va.status || 'Unavailable'], ['Active VA model', va.modelVersion || 'None'], ['Classifier runtime', r.runtimeStatus || 'Unavailable'], ['Active classifier', registry.activeVersion || 'None'], ['Datasets (latest 200)', datasets.items.length], ['Jobs (latest 200)', jobs.length], ['Submitted results', jobs.filter(j => j.report).length], ['Ratings (latest 20,000)', feedback.count]]
-      render(`<p>Hello, ${esc(user.tenDangNhap || 'AI engineer')}. Manage data, experiments and model delivery.</p><div class="stats-grid">${stats.map(([label, value]) => `<div class="stat-card"><div class="stat-copy"><span>${esc(label)}</span><strong>${esc(value)}</strong></div></div>`).join('')}</div>` + panel('Valence/arousal model', `<p>Active version: ${esc(va.modelVersion || '—')} · Runtime: ${esc(va.status || 'unavailable')} · Device: ${esc(va.inferenceDevice || '—')}</p><p>Change the model used by Mood Analysis in Valence/arousal models.</p>`) + panel('Emotion classifier workflow', `<p>Device: ${esc(r.deviceName || '—')} · Enabled: ${esc(r.enabled)} · Language: ${esc(r.language || 'en')}</p><ol><li>Review labeled datasets and independent splits.</li><li>Prepare a training job and download its configured Colab notebook.</li><li>Run explicitly on a training machine or Colab; import the result.</li><li>Review evaluation, then validate and activate an allowlisted candidate in Emotion classifier.</li></ol><p>Training runs externally. Marking a job as running does not launch a process.</p>`))
+      const va = pipelines.english || {}
+      const vi = pipelines.vietnamese || {}
+      const stats = [['App AI enabled', pipelines.enabled], ['English VA runtime', va.status || 'Unavailable'], ['English VA model', va.modelVersion || 'None'], ['Vietnamese runtime', vi.status || 'Unavailable'], ['Vietnamese model', vi.modelVersion || 'None'], ['Legacy classifier runtime', r.runtimeStatus || 'Unavailable'], ['Legacy classifier', registry.activeVersion || 'None'], ['Datasets (latest 200)', datasets.items.length], ['Jobs (latest 200)', jobs.length], ['Submitted results', jobs.filter(j => j.report).length], ['Ratings (latest 20,000)', feedback.count]]
+      render(`<p>Hello, ${esc(user.tenDangNhap || 'AI engineer')}. Manage data, experiments and model delivery.</p><div class="stats-grid">${stats.map(([label, value]) => `<div class="stat-card"><div class="stat-copy"><span>${esc(label)}</span><strong>${esc(value)}</strong></div></div>`).join('')}</div>` + panel('Mobile/Web bilingual analysis', `<p>Auto routing: ${esc(pipelines.routingVersion)}. Vietnamese uses PhoBERT; English uses VA regression. No fallback to another language model when the selected runtime fails.</p>${table(['Language', 'Output', 'Policy', 'Limitation'], pipelines.policies.map(p => '<tr>' + cell(p.language) + cell(p.modelType) + cell(p.mappingVersion) + cell(p.limitation) + '</tr>'))}<p>Confirmations use server-held analysis receipts (5 minutes), then the shared Hybrid recommender. Inference lab tests this same app endpoint.</p>`) + panel('Mood geometry used by both app models', table(['ID', 'Mood', 'Valence range', 'Arousal range'], pipelines.moods.map(m => '<tr>' + cell(m.id) + cell(m.name) + cell(`${m.minValence} to ${m.maxValence}`) + cell(`${m.minArousal} to ${m.maxArousal}`) + '</tr>'))) + panel('Independent legacy classifier and training', `<p>${esc(pipelines.legacyMappingScope)}</p><p>${esc(pipelines.trainingScope)}</p><p>Review datasets and evaluation in their matching pipeline. A runtime marked Ready is not a quality evaluation. Existing local/Colab training remains separate from serving.</p>`))
     } else if (tab === 'aiDatasets') {
       const d = await request('/AiWorkspace/datasets')
       render(panel('Register an immutable English emotion dataset', `<p>JSON array: text, labels, split (train / validation / test). Maximum 60,000 reviewed samples / 32 MB upload (15 MB stored). Training requires at least 400 validation samples for selection/calibration. Duplicate text across splits is rejected. Do not include personal identifiers.</p><details><summary>Accepted labels</summary><p>${esc(d.labels.join(', '))}</p></details><form id="dataset-create"><label class="field">Dataset name<input name="name" required minlength="2" maxlength="100"></label><label class="field">Source and labeling method<input name="source" required minlength="3" maxlength="300"></label><label class="field">Samples JSON<input name="file" type="file" accept=".json,application/json" required></label><div class="ai-actions"><button class="primary-button" type="submit">Register dataset</button>${button('Download format example', 'data-example')}</div></form><p>The three-row example documents the format only; it is not a quality training dataset.</p>`) + panel('Dataset versions (latest 200)', table(['Name', 'Source', 'Samples', 'Split counts', 'Created', 'Actions'], d.items.map(x => `<tr data-updated="${esc(x.createdAt)}">${cell(x.name)}${cell(x.source)}${cell(x.count)}${cell(JSON.stringify(x.splits))}${cell(date(x.createdAt))}<td>${button('Export JSON', `data-dataset="${esc(x.id)}"`)}</td></tr>`))))
@@ -157,6 +176,12 @@ export async function mountAiWorkspace(host, tab, user, mountModels) {
       on('[data-export-feedback]', async () => download('recommendation-ratings.json', await post('feedback/export', {})))
       enhanceList(host.querySelectorAll('section.panel')[1], { dateAvailable: false })
     }
+    if (tab === 'aiDatasets' || tab === 'aiTraining') await mountTypedTools(host, tab)
+    if (tab === 'aiTraining' || tab === 'aiFeedback') await mountFactorizationTools(host)
+    if (tab === 'vaModels' || tab === 'viModels') await mountLifecycleTools(host, tab === 'vaModels' ? 'va' : 'vi')
+    if (tab === 'vaModels' || tab === 'viModels') await mountQualityTools(host, tab === 'vaModels' ? 'va' : 'vi')
+    if (tab === 'aiOverview') await mountInferenceMetrics(host)
+    if (tab === 'aiFeedback') await mountRecommendationExperiments(host)
     on('[data-refresh]', reload)
   } catch (e) {
     render(button('Retry', 'data-retry')); error(e); on('[data-retry]', reload)

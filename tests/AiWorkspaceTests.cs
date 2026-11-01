@@ -6,7 +6,7 @@ public static class AiWorkspaceTests
         Action<bool, string> check, string admin, string engineer, string user)
     {
         await call("GET", "/AiWorkspace/datasets", null, 401, null);
-        foreach (var path in new[] { "datasets", "jobs", "feedback" })
+        foreach (var path in new[] { "datasets", "jobs", "feedback", "pipelines" })
         {
             await call("GET", "/AiWorkspace/" + path, null, 403, user);
             await call("GET", "/AiWorkspace/" + path, null, 200, engineer);

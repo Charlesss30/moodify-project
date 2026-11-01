@@ -242,6 +242,46 @@
             "string",
             "null"
           ]
+        },
+        "analysisLanguage": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "analysisModelType": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "routingVersion": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "analysisValence": {
+          "bsonType": [
+            "double",
+            "decimal",
+            "int",
+            "long",
+            "null"
+          ],
+          "minimum": -1,
+          "maximum": 1
+        },
+        "analysisArousal": {
+          "bsonType": [
+            "double",
+            "decimal",
+            "int",
+            "long",
+            "null"
+          ],
+          "minimum": -1,
+          "maximum": 1
         }
       }
     }
@@ -949,6 +989,217 @@
             "string",
             "null"
           ]
+        }
+      }
+    }
+  },
+  "aiVaAnalyses": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "accountId",
+        "language",
+        "accepted",
+        "suggestedMoodId",
+        "createdAt",
+        "expiresAt",
+        "modelType",
+        "modelVersion",
+        "mappingVersion",
+        "routingVersion",
+        "moodSetHash",
+        "valence",
+        "arousal"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "_id": {
+          "bsonType": "string",
+          "pattern": "^va_[a-f0-9]{32}$"
+        },
+        "accountId": {
+          "bsonType": [
+            "int",
+            "long"
+          ],
+          "minimum": 1
+        },
+        "language": {
+          "enum": [
+            "vi",
+            "en"
+          ]
+        },
+        "accepted": {
+          "enum": [
+            true
+          ]
+        },
+        "suggestedMoodId": {
+          "bsonType": [
+            "int",
+            "long"
+          ],
+          "minimum": 1
+        },
+        "createdAt": {
+          "bsonType": "date"
+        },
+        "expiresAt": {
+          "bsonType": "date"
+        },
+        "leaseId": {
+          "bsonType": [
+            "string",
+            "null"
+          ]
+        },
+        "leaseUntil": {
+          "bsonType": [
+            "date",
+            "null"
+          ]
+        },
+        "modelType": {
+          "bsonType": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "modelVersion": {
+          "bsonType": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "mappingVersion": {
+          "bsonType": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "routingVersion": {
+          "bsonType": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "moodSetHash": {
+          "bsonType": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "valence": {
+          "bsonType": [
+            "double",
+            "decimal",
+            "int",
+            "long"
+          ],
+          "minimum": -1,
+          "maximum": 1
+        },
+        "arousal": {
+          "bsonType": [
+            "double",
+            "decimal",
+            "int",
+            "long"
+          ],
+          "minimum": -1,
+          "maximum": 1
+        },
+        "inputScope": {
+          "enum": [
+            "full_text",
+            "focused_self_description"
+          ]
+        }
+      }
+    }
+  },
+  "aiNlpQualityPolicies": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "Kind",
+        "CreatedAt",
+        "ActorId",
+        "MinimumValidationSamples",
+        "MinimumTestSamples"
+      ],
+      "properties": {
+        "_id": {
+          "bsonType": "string"
+        },
+        "Kind": {
+          "enum": [
+            "vi",
+            "va"
+          ]
+        },
+        "CreatedAt": {
+          "bsonType": "date"
+        },
+        "ActorId": {
+          "bsonType": "int",
+          "minimum": 1
+        },
+        "MinimumValidationSamples": {
+          "bsonType": "int",
+          "minimum": 20
+        },
+        "MinimumTestSamples": {
+          "bsonType": "int",
+          "minimum": 20
+        }
+      }
+    }
+  },
+  "aiNlpQualityApprovals": {
+    "$jsonSchema": {
+      "bsonType": "object",
+      "required": [
+        "_id",
+        "Kind",
+        "Version",
+        "BundleSha256",
+        "WeightSha256",
+        "Mode",
+        "CreatedAt",
+        "ActorId"
+      ],
+      "properties": {
+        "_id": {
+          "bsonType": "string"
+        },
+        "Kind": {
+          "enum": [
+            "vi",
+            "va"
+          ]
+        },
+        "Version": {
+          "bsonType": "string"
+        },
+        "BundleSha256": {
+          "bsonType": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "WeightSha256": {
+          "bsonType": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "Mode": {
+          "enum": [
+            "reviewed_offline_report",
+            "existing_serving_baseline_not_quality_validated"
+          ]
+        },
+        "CreatedAt": {
+          "bsonType": "date"
+        },
+        "ActorId": {
+          "bsonType": "int",
+          "minimum": 1
         }
       }
     }

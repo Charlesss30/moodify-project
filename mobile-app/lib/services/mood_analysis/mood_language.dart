@@ -4,13 +4,11 @@
 /// text may still be misidentified. No additional model is loaded on the phone.
 String detectMoodLanguage(String text) {
   final normalized = text.toLowerCase();
-  if (RegExp(
+  final hasAccents = RegExp(
     r'[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ\u0300-\u036f]',
-  ).hasMatch(normalized)) {
-    return 'vi';
-  }
+  ).hasMatch(normalized);
   final words = RegExp(r"[a-z]+(?:'[a-z]+)?")
-      .allMatches(normalized)
+      .allMatches(_foldMoodText(normalized))
       .map((match) => match.group(0)!)
       .toList();
   const vietnamese = {
@@ -86,10 +84,37 @@ String detectMoodLanguage(String text) {
     'thrilled',
     'terrified',
   };
+  final accentedVietnameseWord = RegExp(r"[^\s.,!?;:]+")
+      .allMatches(normalized)
+      .any(
+        (word) =>
+            _foldMoodText(word.group(0)!) != word.group(0) &&
+            vietnamese.contains(_foldMoodText(word.group(0)!)),
+      );
   final viScore = words.where(vietnamese.contains).length;
   final enScore = words.where(english.contains).length;
+  if (accentedVietnameseWord) return 'vi';
+  if (enScore > 0 && viScore == 0) return 'en';
+  if (hasAccents && enScore == 0) return 'vi';
   // Latin-only text without Vietnamese evidence is usually English. Emoji-only
   // input defaults to Vietnamese, whose preprocessor supports common emoji.
   if (viScore == 0 && enScore == 0) return words.isEmpty ? 'vi' : 'en';
   return enScore > viScore ? 'en' : 'vi';
+}
+
+String _foldMoodText(String text) {
+  const groups = {
+    'a': 'àáảãạăằắẳẵặâầấẩẫậ',
+    'e': 'èéẻẽẹêềếểễệ',
+    'i': 'ìíỉĩị',
+    'o': 'òóỏõọôồốổỗộơờớởỡợ',
+    'u': 'ùúủũụưừứửữự',
+    'y': 'ỳýỷỹỵ',
+    'd': 'đ',
+  };
+  var folded = text.replaceAll('’', "'");
+  for (final group in groups.entries) {
+    folded = folded.replaceAll(RegExp('[${group.value}]'), group.key);
+  }
+  return folded.replaceAll(RegExp(r'[\u0300-\u036f]'), '');
 }

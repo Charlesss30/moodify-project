@@ -90,7 +90,7 @@ public sealed class FirebaseGateway : IGoogleIdentityVerifier, IPushDelivery
                 Fid=token, Notification=new Notification {Title=title, Body=body},
                 Data=new Dictionary<string,string> {["screen"]=screen},
                 Android=new AndroidConfig {
-                    Priority=Priority.High, Notification=new AndroidNotification { ChannelId="moodify_reminders" }
+                    Priority=Priority.High, Notification=new AndroidNotification { ChannelId="moodify_reminders_v2" }
                 }
             },ct);
             return new(true);

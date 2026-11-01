@@ -70,6 +70,13 @@ def va_candidates() -> list[dict]:
 
 
 def active_va_version() -> str | None:
+    state = lifecycle_state("va")
+    if state is not None:
+        version = state.get("active_version")
+        if version is None:
+            return None
+        va_candidate(version)
+        return version
     marker = Path(os.environ.get("VA_ACTIVE_MODEL_FILE", str(va_models_root() / ".active-va-model")))
     try:
         version = marker.read_text(encoding="utf-8").strip()
@@ -116,6 +123,13 @@ def vi_candidates() -> list[dict]:
 
 
 def active_vi_version() -> str | None:
+    state = lifecycle_state("vi")
+    if state is not None:
+        version = state.get("active_version")
+        if version is None:
+            return None
+        vi_candidate(version)
+        return version
     marker = Path(os.environ.get("VI_ACTIVE_MODEL_FILE", str(vi_models_root() / ".active-model")))
     try:
         version = marker.read_text(encoding="utf-8").strip()
@@ -147,13 +161,13 @@ async def lifespan(app: FastAPI):
         except Exception as error:
             app.state.load_error = type(error).__name__
             logger.error("Model is not ready (%s).", type(error).__name__)
-    if os.environ.get("VA_MODEL_ENABLED", "").lower() == "true":
+    if os.environ.get("VA_MODEL_ENABLED", "").lower() == "true" and not disabled_by_operator("va"):
         try:
             from va_predictor import ValenceArousalPredictor
 
             version = active_va_version() or Path(os.environ.get("VA_MODEL_DIR", str(_default_va_dir))).name
             checkpoint, tokenizer_dir = va_candidate(version)
-            app.state.va_predictor = ValenceArousalPredictor(checkpoint, tokenizer_dir, version)
+            app.state.va_predictor = verify_loaded_identity("va", ValenceArousalPredictor(checkpoint, tokenizer_dir, version))
             app.state.va_active_version = version
         except Exception as error:
             app.state.va_load_error = type(error).__name__
@@ -164,7 +178,7 @@ async def lifespan(app: FastAPI):
             try:
                 from vietnamese_predictor import VietnameseEmotionPredictor
 
-                app.state.vi_predictor = VietnameseEmotionPredictor(vi_candidate(version), version)
+                app.state.vi_predictor = verify_loaded_identity("vi", VietnameseEmotionPredictor(vi_candidate(version), version))
                 app.state.vi_active_version = version
             except Exception as error:
                 app.state.vi_load_error = type(error).__name__
@@ -182,11 +196,13 @@ class PredictionRequest(BaseModel):
 
 class ActivateVARequest(BaseModel):
     version: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{2,79}$")
+    expected_revision: int | None = Field(default=None, ge=0)
+    expected_fingerprint: str | None = Field(default=None, pattern=r"^[a-fA-F0-9]{64}$")
 
 
 @app.get("/health/live")
 def live():
-    return {"status": "live"}
+    return {"status": "live", "process_id": os.getpid()}
 
 
 @app.get("/health/ready")
@@ -246,35 +262,7 @@ def list_va_models():
 
 @app.post("/models/va/activate")
 def activate_va_model(request: ActivateVARequest):
-    # A newly uploaded candidate can bootstrap an empty VA runtime.
-    if app.state.va_predictor is not None and request.version == app.state.va_active_version:
-        return {"status": "ready", "active_version": request.version,
-                "device": app.state.va_predictor.device}
-    if not _predict_lock.acquire(blocking=False):
-        raise HTTPException(status_code=429, detail="Inference is busy. Retry model activation shortly.")
-    try:
-        try:
-            checkpoint, tokenizer = va_candidate(request.version)
-            from va_predictor import ValenceArousalPredictor
-
-            candidate = ValenceArousalPredictor(checkpoint, tokenizer, request.version)
-            smoke = candidate.predict("Moodify model readiness check.")
-            if smoke.get("model_version") != request.version:
-                raise ValueError("Candidate smoke check returned an unexpected model version.")
-            marker = Path(os.environ.get("VA_ACTIVE_MODEL_FILE", str(va_models_root() / ".active-va-model")))
-            marker.parent.mkdir(parents=True, exist_ok=True)
-            temporary = marker.with_name(marker.name + ".tmp")
-            temporary.write_text(request.version + "\n", encoding="utf-8")
-            temporary.replace(marker)
-            app.state.va_predictor = candidate
-            app.state.va_active_version = request.version
-            app.state.va_load_error = None
-            return {"status": "ready", "active_version": request.version, "device": candidate.device}
-        except Exception as error:
-            logger.exception("VA candidate activation failed for %s.", request.version)
-            raise HTTPException(status_code=422, detail="Candidate could not be loaded or failed its readiness check.") from error
-    finally:
-        _predict_lock.release()
+    return model_lifecycle("va", "activate", request.version, request.expected_revision, request.expected_fingerprint)
 
 
 @app.post("/predict-va")
@@ -302,7 +290,9 @@ def vi_ready():
     predictor = app.state.vi_predictor
     if predictor is None:
         raise HTTPException(status_code=503, detail="Vietnamese emotion model is unavailable.")
-    return {"status": "ready", "model_version": predictor.model_version, "language": "vi", "inference_device": predictor.device}
+    return {"status": "ready", "model_version": predictor.model_version, "language": "vi", "inference_device": predictor.device,
+            "preprocessing_status": getattr(predictor, "preprocessing_status", "unknown"),
+            "preprocessing_sha256": getattr(predictor, "preprocessing_hash", None)}
 
 
 @app.get("/models/vi")
@@ -312,32 +302,7 @@ def list_vi_models():
 
 @app.post("/models/vi/activate")
 def activate_vi_model(request: ActivateVARequest):
-    if app.state.vi_predictor is not None and request.version == app.state.vi_active_version:
-        return {"status": "ready", "active_version": request.version, "device": app.state.vi_predictor.device}
-    if not _vi_predict_lock.acquire(blocking=False):
-        raise HTTPException(status_code=429, detail="Vietnamese inference is busy. Retry activation shortly.")
-    try:
-        try:
-            from vietnamese_predictor import VietnameseEmotionPredictor
-
-            candidate = VietnameseEmotionPredictor(vi_candidate(request.version), request.version)
-            smoke = candidate.predict("Tôi cảm thấy vui vẻ và bình yên.")
-            if smoke.get("model_version") != request.version or smoke.get("language") != "vi":
-                raise ValueError("Vietnamese model readiness result is invalid.")
-            marker = Path(os.environ.get("VI_ACTIVE_MODEL_FILE", str(vi_models_root() / ".active-model")))
-            marker.parent.mkdir(parents=True, exist_ok=True)
-            temporary = marker.with_name(marker.name + ".tmp")
-            temporary.write_text(request.version + "\n", encoding="utf-8")
-            temporary.replace(marker)
-            app.state.vi_predictor = candidate
-            app.state.vi_active_version = request.version
-            app.state.vi_load_error = None
-            return {"status": "ready", "active_version": request.version, "device": candidate.device}
-        except Exception as error:
-            logger.exception("Vietnamese candidate activation failed for %s.", request.version)
-            raise HTTPException(status_code=422, detail="Vietnamese model could not be loaded or failed readiness check.") from error
-    finally:
-        _vi_predict_lock.release()
+    return model_lifecycle("vi", "activate", request.version, request.expected_revision, request.expected_fingerprint)
 
 
 @app.post("/predict-vi")
@@ -356,3 +321,181 @@ def predict_vi(request: PredictionRequest):
             raise HTTPException(status_code=422, detail=str(error)) from error
     finally:
         _vi_predict_lock.release()
+
+
+def lifecycle_path(kind):
+    marker = Path(os.environ.get("VA_ACTIVE_MODEL_FILE", str(va_models_root() / ".active-va-model"))) if kind == "va" else Path(os.environ.get("VI_ACTIVE_MODEL_FILE", str(vi_models_root() / ".active-model")))
+    return marker, marker.with_name(marker.name + ".lifecycle.json")
+
+
+def lifecycle_state(kind):
+    import json
+    _, state_path = lifecycle_path(kind)
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        if not isinstance(state, dict) or type(state.get("revision")) is not int:
+            raise ValueError("Invalid lifecycle state.")
+        return state
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, TypeError):
+        logger.error("Model lifecycle state is invalid for %s.", kind)
+        return {"revision": 0, "active_version": None, "previous_version": None, "error": "invalid_state"}
+
+
+def disabled_by_operator(kind):
+    state = lifecycle_state(kind)
+    return state is not None and state.get("active_version") is None
+
+
+def persist_lifecycle(kind, version, previous, bundle=None, previous_bundle=None):
+    import json
+    marker, state_path = lifecycle_path(kind)
+    state = lifecycle_state(kind) or {"revision": 0}
+    payload = {"active_version": version, "previous_version": previous, "revision": state["revision"] + 1,
+               "active_bundle_sha256": bundle, "previous_bundle_sha256": previous_bundle}
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = state_path.with_name(state_path.name + ".tmp")
+    temporary.write_text(json.dumps(payload), encoding="utf-8")
+    temporary.replace(state_path)
+    # New code reads the atomic state first. Legacy marker is a compatibility mirror only.
+    try:
+        temporary = marker.with_name(marker.name + ".tmp")
+        temporary.write_text((version or "none") + "\n", encoding="utf-8")
+        temporary.replace(marker)
+    except OSError:
+        logger.warning("Lifecycle state committed; legacy marker mirror could not be refreshed.")
+    return payload
+
+
+def load_candidate(kind, version):
+    if kind == "va":
+        from va_predictor import ValenceArousalPredictor
+        checkpoint, tokenizer = va_candidate(version)
+        candidate = ValenceArousalPredictor(checkpoint, tokenizer, version)
+        smoke = candidate.predict("I feel calm today.")
+    else:
+        from vietnamese_predictor import VietnameseEmotionPredictor
+        candidate = VietnameseEmotionPredictor(vi_candidate(version), version)
+        smoke = candidate.predict("Tôi đang cảm thấy vui.")
+    import math
+    if smoke.get("model_version") != version or smoke.get("language") != ("en" if kind == "va" else "vi") or any(
+        type(smoke.get(key)) not in (int, float) or not math.isfinite(smoke[key]) or not -1 <= smoke[key] <= 1 for key in ("valence", "arousal")
+    ):
+        raise ValueError("Readiness output is outside the model contract.")
+    return candidate
+
+
+def model_lifecycle(kind, action, version=None, expected_revision=None, expected_fingerprint=None):
+    lock = _predict_lock if kind == "va" else _vi_predict_lock
+    if not lock.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="Inference is busy; retry model control.")
+    prefix = "va" if kind == "va" else "vi"
+    try:
+        state = lifecycle_state(kind) or {"revision": 0, "previous_version": None}
+        if expected_revision is not None and state["revision"] != expected_revision:
+            raise HTTPException(status_code=409, detail="Model lifecycle changed. Refresh before retrying.")
+        if state.get("error"):
+            raise HTTPException(status_code=409, detail="Stored lifecycle state needs operator repair; it will not be overwritten.")
+        current = getattr(app.state, prefix + "_active_version", None)
+        predictor = getattr(app.state, prefix + "_predictor", None)
+        if action == "deactivate":
+            payload = persist_lifecycle(kind, None, current or state.get("previous_version"), None,
+                getattr(predictor,"artifact_fingerprint",{}).get("bundleSha256") or state.get("previous_bundle_sha256"))
+            setattr(app.state, prefix + "_predictor", None)
+            setattr(app.state, prefix + "_active_version", None)
+            return {"status": "inactive", **payload}
+        if action == "rollback":
+            version = state.get("previous_version")
+            expected_fingerprint = expected_fingerprint or state.get("previous_bundle_sha256")
+            if not version:
+                raise HTTPException(status_code=409, detail="No previous model artifact to restore.")
+        if action == "activate" and current == version and predictor is not None:
+            if expected_fingerprint and getattr(predictor,"artifact_fingerprint",{}).get("bundleSha256") != expected_fingerprint:
+                raise HTTPException(status_code=409, detail="Loaded model identity differs from approved artifact; use a new immutable version.")
+            return {"status": "ready", "active_version": version, "device": predictor.device, "revision": state["revision"]}
+        try:
+            candidate = load_candidate(kind, version)
+            if expected_fingerprint and getattr(candidate,"artifact_fingerprint",{}).get("bundleSha256") != expected_fingerprint:
+                raise HTTPException(status_code=409, detail="Artifact identity changed after approval; current model remains unchanged.")
+            if action == "validate":
+                device = candidate.device
+                del candidate
+                return {"status": "validated_readiness_only", "version": version, "device": device,
+                        "revision": state["revision"], "quality_validated": False}
+            payload = persist_lifecycle(kind, version, current or state.get("previous_version"),
+                getattr(candidate,"artifact_fingerprint",{}).get("bundleSha256"),
+                getattr(predictor,"artifact_fingerprint",{}).get("bundleSha256") or state.get("previous_bundle_sha256"))
+            setattr(app.state, prefix + "_predictor", candidate)
+            setattr(app.state, prefix + "_active_version", version)
+            setattr(app.state, prefix + "_load_error", None)
+            return {"status": "ready", "device": candidate.device, **payload}
+        except HTTPException:
+            raise
+        except Exception as error:
+            logger.exception("Candidate lifecycle failed for %s.", kind)
+            raise HTTPException(status_code=422, detail="Candidate failed loading/readiness; current model remains unchanged.") from error
+    finally:
+        lock.release()
+
+
+class LifecycleControl(BaseModel):
+    expected_revision: int = Field(ge=0)
+    expected_fingerprint: str | None = Field(default=None, pattern=r"^[a-fA-F0-9]{64}$")
+
+
+@app.get("/models/{kind}/lifecycle")
+def get_lifecycle(kind: str):
+    if kind not in ("va", "vi"):
+        raise HTTPException(status_code=404, detail="Unknown model pipeline.")
+    return lifecycle_state(kind) or {"active_version": getattr(app.state, kind + "_active_version", None),
+                                    "previous_version": None, "revision": 0}
+
+
+@app.post("/models/{kind}/validate")
+def validate_candidate(kind: str, request: ActivateVARequest):
+    if kind not in ("va", "vi"):
+        raise HTTPException(status_code=404, detail="Unknown model pipeline.")
+    return model_lifecycle(kind, "validate", request.version)
+
+
+@app.post("/models/{kind}/deactivate")
+def deactivate_candidate(kind: str, request: LifecycleControl):
+    if kind not in ("va", "vi"):
+        raise HTTPException(status_code=404, detail="Unknown model pipeline.")
+    return model_lifecycle(kind, "deactivate", expected_revision=request.expected_revision)
+
+
+@app.post("/models/{kind}/rollback")
+def rollback_candidate(kind: str, request: LifecycleControl):
+    if kind not in ("va", "vi"):
+        raise HTTPException(status_code=404, detail="Unknown model pipeline.")
+    return model_lifecycle(kind, "rollback", expected_revision=request.expected_revision, expected_fingerprint=request.expected_fingerprint)
+
+
+@app.get("/models/{kind}/fingerprint/{version}")
+def model_fingerprint(kind: str, version: str):
+    from artifact_fingerprint import fingerprint_files
+    if kind not in ("va", "vi"):
+        raise HTTPException(status_code=404, detail="Unknown model pipeline.")
+    try:
+        if kind == "vi":
+            fingerprint = fingerprint_files(kind, vi_candidate(version), version)
+        else:
+            checkpoint, _ = va_candidate(version)
+            fingerprint = fingerprint_files(kind, checkpoint.parent, version, checkpoint)
+    except (ValueError, OSError) as error:
+        raise HTTPException(status_code=404, detail="Stored model fingerprint is unavailable.") from error
+    predictor = getattr(app.state, kind + "_predictor", None)
+    loaded = getattr(predictor, "artifact_fingerprint", None)
+    active = predictor is not None and getattr(predictor, "model_version", None) == version
+    return {**fingerprint, "active": active,
+            "activeBundleSha256": loaded.get("bundleSha256") if active and loaded else None}
+
+
+def verify_loaded_identity(kind, predictor):
+    state = lifecycle_state(kind) or {}
+    expected = state.get("active_bundle_sha256")
+    if expected and getattr(predictor,"artifact_fingerprint",{}).get("bundleSha256") != expected:
+        raise ValueError("Stored active artifact changed since activation; independent review is required.")
+    return predictor

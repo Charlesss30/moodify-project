@@ -715,18 +715,14 @@ const analyzeButton =
         "analyze-btn"
     );
 
-const moodLanguage = document.getElementById("mood-language");
-if (moodLanguage) {
-    moodLanguage.addEventListener("change", () => {
-        const input = document.getElementById("mood-input");
-        const note = document.getElementById("mood-language-note");
-        const isVietnamese = moodLanguage.value === "vi";
-        if (input) input.placeholder = isVietnamese ? "Hãy mô tả cảm xúc của bạn bằng tiếng Việt..." : "Describe how you're feeling in English...";
-        if (note) note.textContent = isVietnamese
-            ? "PhoBERT hiển thị 3 nhãn cảm xúc hàng đầu; gợi ý dùng tọa độ VA tổng hợp từ phân bố lớp."
-            : "RoBERTa estimates valence/arousal; the page also shows the three closest moods.";
-    });
-}
+let moodAnalysisGeneration = 0;
+document.getElementById('mood-input')?.addEventListener('input', () => {
+    moodAnalysisGeneration++;
+    const result = document.getElementById('mood-result');
+    result?.replaceChildren();
+    const note = document.getElementById('mood-language-note');
+    if (note) note.textContent = 'Vietnamese / English detected automatically.';
+});
 
 if (analyzeButton) {
 
@@ -748,7 +744,8 @@ if (analyzeButton) {
 
             const text =
                 input.value.trim();
-            const language = moodLanguage?.value === "vi" ? "vi" : "en";
+            let language = "en";
+            const generation = ++moodAnalysisGeneration;
 
             if (!text) {
 
@@ -770,7 +767,7 @@ if (analyzeButton) {
 
             analyzeButton.disabled = true;
             analyzeButton.textContent = "Analyzing…";
-            result.textContent = language === "vi" ? "Đang phân tích bằng PhoBERT tiếng Việt…" : "Analyzing your mood with RoBERTa VA…";
+            result.textContent = "Đang tự nhận diện Việt / Anh và phân tích…";
             result.classList.remove("hidden");
 
             try {
@@ -780,15 +777,28 @@ if (analyzeButton) {
                         "Content-Type": "application/json",
                         "Authorization": `Bearer ${token}`
                     },
-                    body: JSON.stringify({ text, language })
+                    body: JSON.stringify({ text, language: "auto" })
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.message || "The VA model is unavailable.");
 
+                if (generation !== moodAnalysisGeneration) return;
+                language = data.language || language;
+                const note = document.getElementById('mood-language-note');
+                if (note) note.textContent = data.modelVersion ? "Model: " + data.modelVersion + " · " + language : data.message || "No model result.";
                 result.replaceChildren();
+                if (data.status !== "matched" || !data.accepted || !data.analysisId || !data.mood) {
+                    result.textContent = data.message || "Please describe your mood again or choose a mood manually.";
+                    return;
+                }
                 const summary = document.createElement("p");
-                summary.textContent = `${language === "vi" ? "Mood ứng dụng gần nhất" : "Nearest app mood"}: ${data.mood.tenTamTrang} · Valence ${Number(data.valence).toFixed(2)} · Arousal ${Number(data.arousal).toFixed(2)}`;
+                summary.textContent = `${language === "vi" ? "Tâm trạng gợi ý" : "Suggested mood"}: ${data.mood.tenTamTrang} · Valence ${Number(data.valence).toFixed(2)} · Arousal ${Number(data.arousal).toFixed(2)}`;
                 result.append(summary);
+                const methodNote = document.createElement('p');
+                methodNote.textContent = data.mappingMethod === 'explicit_self_description'
+                    ? (language === 'vi' ? 'Kết hợp cảm xúc bạn mô tả trực tiếp với model. Hãy xác nhận tâm trạng trước khi nhận gợi ý.' : 'Combines your explicit self-description with the model. Confirm this mood before recommendations.')
+                    : data.message || '';
+                result.append(methodNote);
 
                 const alternatives = language === "vi"
                     ? (data.emotionCandidates || []).map(item => `${item.label} (${Math.round(Number(item.score) * 100)}%)`)
@@ -802,18 +812,12 @@ if (analyzeButton) {
                     result.append(candidateLine);
                 }
 
-                if (language === "vi" && data.accepted === false) {
-                    const uncertainty = document.createElement("p");
-                    uncertainty.textContent = "Độ tin cậy dưới ngưỡng kiểm định; hãy diễn đạt rõ hơn rồi thử lại trước khi dùng gợi ý này.";
-                    result.append(uncertainty);
-                    return;
-                }
-
                 const recommend = document.createElement("button");
                 recommend.type = "button";
                 recommend.className = "small-primary-btn";
-                recommend.textContent = language === "vi" ? "Gợi ý phim và nhạc theo điểm cảm xúc tổng hợp" : "Recommend movies and music from the VA score";
+                recommend.textContent = language === "vi" ? "Xác nhận và nhận gợi ý phim, nhạc" : "Confirm mood and get recommendations";
                 recommend.addEventListener("click", async () => {
+                    if (generation !== moodAnalysisGeneration) return;
                     recommend.disabled = true;
                     recommend.textContent = language === "vi" ? "Đang tìm phim và nhạc…" : "Finding recommendations…";
                     try {
@@ -824,17 +828,16 @@ if (analyzeButton) {
                                 "Authorization": `Bearer ${token}`
                             },
                             body: JSON.stringify({
-                                mode: "mood",
+                                mode: "hybrid",
                                 source: "ai_va",
-                                modelVersion: data.modelVersion,
+                                analysisId: data.analysisId,
                                 tamTrangID: data.mood.tamTrangID,
-                                valence: data.valence,
-                                arousal: data.arousal,
                                 limit: 12,
                                 balanced: true
                             })
                         });
                         const recommendations = await recResponse.json();
+                        if (generation !== moodAnalysisGeneration) return;
                         if (!recResponse.ok) throw new Error(recommendations.message || "Could not load recommendations.");
                         const heading = document.createElement("h3");
                         heading.textContent = language === "vi" ? "Phim và nhạc phù hợp với cảm xúc" : "Movies and music for this mood";
@@ -862,6 +865,7 @@ if (analyzeButton) {
                 });
                 result.append(recommend);
             } catch (error) {
+                if (generation !== moodAnalysisGeneration) return;
                 result.textContent = error.message || "Unable to analyze your mood.";
             } finally {
                 analyzeButton.disabled = false;

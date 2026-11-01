@@ -194,22 +194,43 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             ),
             if (_year != null) ...[
               const SizedBox(height: 12),
-              DropdownButtonFormField<int>(
-                key: ValueKey('statistics-year-$_year'),
-                initialValue: _year,
-                decoration: const InputDecoration(
-                  labelText: 'Năm thống kê',
-                  prefixIcon: Icon(Icons.calendar_month_outlined),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 240),
+                  child: DropdownButtonFormField<int>(
+                    key: ValueKey('statistics-year-$_year'),
+                    initialValue: _year,
+                    isExpanded: true,
+                    menuMaxHeight: 288,
+                    borderRadius: BorderRadius.circular(16),
+                    dropdownColor: AppColors.surface,
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                    decoration: const InputDecoration(
+                      labelText: 'Năm thống kê',
+                      prefixIcon: Icon(Icons.calendar_month_outlined),
+                    ),
+                    items: [
+                      for (
+                        var value = DateTime.now().year;
+                        value >= 2000;
+                        value--
+                      )
+                        DropdownMenuItem(
+                          value: value,
+                          child: Text(
+                            'Năm $value',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null || value == _year) return;
+                      _year = value;
+                      load();
+                    },
+                  ),
                 ),
-                items: [
-                  for (var value = DateTime.now().year; value >= 2000; value--)
-                    DropdownMenuItem(value: value, child: Text('Năm $value')),
-                ],
-                onChanged: (value) {
-                  if (value == null || value == _year) return;
-                  _year = value;
-                  load();
-                },
               ),
             ],
             const SizedBox(height: 18),

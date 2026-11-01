@@ -1,6 +1,6 @@
 # Bộ ca thử PhoBERT tiếng Việt và RoBERTa VA tiếng Anh
 
-Ngày đối chiếu mã nguồn: 25/10/2026. Đây là ca thử được soạn từ luồng hiện có, chưa phải kết quả kiểm thử. Không thay đổi model, mapping hay dữ liệu người dùng khi soạn tài liệu này.
+Ngày soạn ban đầu: 25/10/2026. Cập nhật hợp đồng và kết quả smoke: **27/10/2026**. Hai mươi ca dưới đây đã chạy với weights thật qua backend và bản sao catalog trong MongoDB tạm; xem [bằng chứng và giới hạn](AI_SYSTEM_UNIFICATION_RESULTS.md). Kỳ vọng ngữ nghĩa vẫn là gợi ý rà soát, chưa phải bộ nhãn độc lập để tính accuracy/MAE.
 
 ## 1. Khi nào dùng model nào?
 
@@ -8,23 +8,23 @@ Hai model active độc lập; active đồng thời không có nghĩa mỗi câ
 
 | Nơi sử dụng | Cách chọn | Model thực sự được gọi |
 | --- | --- | --- |
-| Web người dùng, AI Mood Analysis | Chọn `Tiếng Việt · PhoBERT` | POST `/api/MoodAnalysis/valence-arousal`, `language=vi` → `/predict-vi` → PhoBERT đang active |
-| Web người dùng, AI Mood Analysis | Chọn `English · RoBERTa VA` (mặc định) | Cùng API trên, `language=en` → `/predict-va` → RoBERTa VA đang active |
-| Mobile, ô mô tả trong Khám phá | Tự nhận diện Việt/Anh, không có bộ chọn ngôn ngữ | `/api/MoodAnalysis/valence-arousal`: `vi` → PhoBERT, `en` → RoBERTa VA |
-| Dashboard kỹ sư, Inference lab hiện tại | Mục `Test English text` của Emotion classifier | Luồng classifier tiếng Anh cũ, không dùng để kết luận chất lượng hai model mới |
+| Web người dùng, AI Mood Analysis | Backend tự nhận diện Việt/Anh (`language=auto`) | `vi` → `/predict-vi`; `en` → `/predict-va` |
+| Mobile, ô mô tả trong Khám phá | Cùng API và quy tắc backend; không có bộ chọn ngôn ngữ | PhoBERT VI / RoBERTa VA EN đang phục vụ |
+| Dashboard kỹ sư, Inference lab | Gọi cùng API song ngữ của app | Không còn chỉ kiểm thử classifier cũ ở tab này |
+| Emotion classifier và GoEmotions mapping | Pipeline cũ độc lập | Classifier 28 nhãn và mapping riêng |
 
-Web chọn theo trường `language`, chưa tự phát hiện ngôn ngữ từ nội dung câu. Nhập tiếng Việt nhưng giữ English vẫn đi RoBERTa VA. Mobile đã chuyển từ classifier cũ sang API song ngữ: tự nhận diện dấu và từ thường gặp, không có lựa chọn ngôn ngữ thủ công. Câu không dấu hoặc pha ngôn ngữ có thể nhận diện chưa chính xác. Văn bản chỉ có emoji mặc định dùng tiếng Việt; văn bản Latin không có dấu hiệu tiếng Việt mặc định dùng tiếng Anh. Đây là quy tắc định tuyến nhẹ, không phải bộ nhận diện mọi ngôn ngữ.
+Quy tắc nhẹ ở backend: có dấu Việt ưu tiên VI; không dấu dùng điểm từ Việt/Anh; emoji dùng VI; Latin không có dấu hiệu Việt mặc định EN; chữ thuộc hệ khác trả `unsupported_language`. Câu ngắn, tên riêng và pha ngôn ngữ có thể định tuyến sai. Không âm thầm chuyển sang model còn lại nếu model đã chọn lỗi. API vẫn hỗ trợ `language=vi/en` cho client gọi chủ động, nhưng Mobile/Web chính dùng `auto`.
 
-Tên phiên bản đã dùng trong lần cấu hình gần nhất: `phobert_vsmec_v2` và `roberta_va_regression`. Nếu đổi active version, tên trả về sẽ đổi; không dựa vào tên file ZIP để xác định model đang xử lý.
+Phiên bản đã kiểm chứng trong smoke ngày 27/10: `phobert_vsmec_v2` và `roberta_va_regression_v2`, CUDA. Đây là phiên bản của lần chạy, không phải tên buộc cứng trong client.
 
 ## 2. Cách biết chắc câu vừa nhập dùng model nào
 
-1. Đăng nhập Web người dùng tại `http://localhost:5170/`, tới AI Mood Analysis và chọn đúng ngôn ngữ.
+1. Đăng nhập Web người dùng tại `http://localhost:5170/`, tới AI Mood Analysis và nhập mô tả Việt/Anh.
 2. Mở DevTools → Network → thực hiện phân tích → chọn request `MoodAnalysis/valence-arousal`.
-3. Trong Payload, kiểm tra `language`. Trong Response, kiểm tra `language` và `modelVersion`. Đây là bằng chứng của request vừa chạy. Có tên model trong dashboard chỉ chứng minh trạng thái runtime, không chứng minh request trên Mobile/Web đã đi đúng luồng.
+3. Trong Payload, kiểm tra `language=auto`. Trong Response, kiểm tra `language`, `modelVersion`, `modelType`, `mappingVersion` và `accepted`. Đây là bằng chứng của request vừa chạy. Có tên model trong dashboard chỉ chứng minh trạng thái runtime, không chứng minh request trên Mobile/Web đã đi đúng luồng.
 4. PhoBERT trả thêm `emotion`, `confidence`, `accepted`, `emotionCandidates`. RoBERTa VA trả `valence`, `arousal`, `moodCandidates`; không có confidence phân loại cảm xúc.
 
-Trên Mobile, vào Khám phá → nhập câu → Phân tích tâm trạng. Một dòng nhỏ dưới ô nhập hiển thị `Model: PhoBERT · Tiếng Việt` hoặc `Model: RoBERTa VA · English`. Ngôn ngữ được nhận diện tự động; mở **Thông tin phân tích** để xem `Phiên bản` model thực sự trả về. Khi xác nhận nhận gợi ý, Mobile gửi nguyên V/A và phiên bản với `source=ai_va`. Nếu chọn lại mood thủ công, app xóa quyết định AI và gửi `source=manual`.
+Trên Mobile, vào Khám phá → nhập câu → Phân tích tâm trạng. Một dòng nhỏ dưới ô nhập hiển thị `Model: PhoBERT · Tiếng Việt` hoặc `Model: RoBERTa VA · English`. Ngôn ngữ được nhận diện tự động; mở **Thông tin phân tích** để xem `Phiên bản` model thực sự trả về. Trước khi phân tích, dòng model là dự kiến; sau khi phân tích mới hiển thị ngôn ngữ server đã trả. Khi xác nhận, Mobile gửi `analysisId` với `source=ai_va`, không gửi V/A hoặc modelVersion. Nếu chọn mood thủ công sau phân tích, app gửi `source=manual` và giữ mã nguồn gốc khi còn có mã; backend dùng tâm vùng mood được chọn.
 
 Có thể thử trực tiếp inference bằng PowerShell khi service đang chạy, không cần ghi lịch sử hay xin gợi ý:
 
@@ -55,12 +55,12 @@ Cách gọi trực tiếp chỉ kiểm tra model. Muốn kiểm tra cả backend
 - RoBERTa VA dự đoán trực tiếp hai tọa độ bằng mô hình regression. PhoBERT phân loại 7 cảm xúc rồi tính V/A bằng trung bình có trọng số xác suất trên các điểm neo do project quy định; V/A của PhoBERT không phải đầu ra của một model regression đã học riêng.
 - Backend chọn mood có tâm vùng V/A gần nhất theo khoảng cách Euclidean; nếu bằng nhau, ưu tiên mood ID nhỏ hơn. Tên mood phụ thuộc cấu hình database, không bắt buộc một câu phải luôn ra tên mood cố định sau khi mapping bị chỉnh.
 - `confidence_threshold.json` của phiên bản PhoBERT `phobert_vsmec_v2` hiện đặt ngưỡng **0.7559639811515808**. `accepted` phải bằng phép so sánh confidence >= ngưỡng này. Không phải câu đúng nhãn nào cũng nhất thiết vượt ngưỡng.
-- Nếu `accepted=false`, Web hiện cảnh báo và không hiện nút lấy gợi ý cho kết quả đó. Backend vẫn có thể trả `status=matched`; không được dùng riêng status này làm bằng chứng vượt ngưỡng.
+- Nếu `accepted=false`, Web hiện cảnh báo và không hiện nút lấy gợi ý cho kết quả đó. Backend hiện trả `status=unknown`, `mood=null`, `analysisId=null`; không dùng kết quả này như một xác nhận AI.
 - Các nhãn/hướng V/A trong bảng dưới là kỳ vọng để đánh giá chất lượng, chưa được xác minh bằng suy luận thật. Trả JSON hợp lệ là đạt kỹ thuật; ra sai cảm xúc vẫn là chưa đạt chất lượng. Confidence cao cũng không chứng minh dự đoán đúng.
 
 ## 4. Mười ca thử PhoBERT tiếng Việt
 
-Chọn Tiếng Việt trên Web hoặc dùng `Test-MoodModel -Language vi`. Mỗi ca phải trả đúng active version tiếng Việt, không đổi active model tiếng Anh.
+Nhập tiếng Việt trên Web/Mobile hoặc dùng `Test-MoodModel -Language vi`. Mỗi ca phải trả đúng active version tiếng Việt, không đổi active model tiếng Anh.
 
 | Mã | Văn bản nhập nguyên câu | Kỳ vọng cảm xúc để đối chiếu | Điều cần quan sát |
 | --- | --- | --- | --- |
@@ -79,7 +79,7 @@ PhoBERT hiện có đúng 7 lớp: Anger, Disgust, Enjoyment, Fear, Other, Sadne
 
 ## 5. Mười ca thử RoBERTa VA tiếng Anh
 
-Chọn English trên Web hoặc dùng `Test-MoodModel -Language en`. Không yêu cầu trả nhãn GoEmotions hay confidence vì đây là regression V/A.
+Nhập tiếng Anh trên Web/Mobile hoặc dùng `Test-MoodModel -Language en`. Không yêu cầu trả nhãn GoEmotions hay confidence vì đây là regression V/A.
 
 | Mã | Văn bản nhập nguyên câu | Hướng V/A mong đợi để đối chiếu | Mục đích |
 | --- | --- | --- | --- |
@@ -106,14 +106,14 @@ Nên ghi kết quả trước khi bấm lấy gợi ý để tách lỗi hiểu 
 
 ## 7. Mã nguồn đã đối chiếu
 
-- `backend/wwwroot/index.html`: lựa chọn ngôn ngữ của Web.
+- `backend/wwwroot/index.html`: ô mô tả và thông báo model tự nhận ngôn ngữ.
 - `backend/wwwroot/app.js`: gửi ngôn ngữ, nhận V/A, xử lý accepted=false.
 - `backend/Controllers/MoodAnalysisController.cs`: hai endpoint MoodAnalysis cũ và valence-arousal mới.
-- `backend/Services/VietnameseEmotionService.cs`, `ValenceArousalAnalysisService.cs`: gọi inference và tìm mood gần nhất.
+- `backend/Services/BilingualMoodAnalysisService.cs`, `MoodLanguageRouter.cs`, `VaAnalysisReceipt.cs`: hợp đồng chung, định tuyến, mood/VA và receipt. Hai service VI/VA riêng vẫn phục vụ quản lý runtime/candidate.
 - `backend/Services/MoodAnalysisService.cs`: luồng classifier tiếng Anh cũ.
 - `ai-service/vietnamese_predictor.py`, `va_predictor.py`, `main.py`: chuẩn hóa, suy luận và schema đầu ra.
-- `mobile-app/lib/core/api_service.dart`, `mobile-app/lib/screens/mood_discovery_screen.dart`, `mobile-app/lib/services/mood_analysis/mood_language.dart`: API song ngữ, tự nhận diện ngôn ngữ và dòng model dưới ô nhập, gửi đúng V/A và modelVersion.
-- `admin-web/src/ai-workspace.js`: Inference lab hiện ghép lại mục Test English text.
+- `mobile-app/lib/core/api_service.dart`, `mobile-app/lib/screens/mood_discovery_screen.dart`, `mobile-app/lib/services/mood_analysis/mood_language.dart`: API song ngữ, hint model và dòng model server trả, xác nhận bằng analysisId. Heuristic Dart chỉ dùng cho hint, backend mới quyết định routing.
+- `admin-web/src/ai-workspace.js`: Inference lab gọi API song ngữ của ứng dụng; overview phân biệt hai model và mapping cũ.
 
 ## 8. Kết quả kiểm tra tích hợp Mobile ngày 25/10/2026
 
@@ -123,3 +123,7 @@ Nên ghi kết quả trước khi bấm lấy gợi ý để tách lỗi hiểu 
 
 
 Sau khi khôi phục giao diện `eeda4b6` ngày 25/10/2026, toàn bộ **57 ca kiểm tra Flutter pass**; các ca AI song ngữ vẫn kiểm tra đúng endpoint/modelVersion/V/A trong giao diện đã khôi phục. Thông tin phiên bản nằm trong mục mở rộng **Thông tin phân tích**. Kết quả này không thay thế việc chạy 20 câu đánh giá chất lượng trên model thật.
+
+## 9. Kết quả cập nhật 27/10/2026
+
+Toàn bộ 75 test Flutter pass; backend 795 assertion pass; hai model CUDA thật qua API/recommender/history pass 191 assertion trên 26 mô tả và MongoDB tạm. Đây là bằng chứng kỹ thuật, không phải accuracy độc lập. Xem [AI_SYSTEM_UNIFICATION_RESULTS.md](AI_SYSTEM_UNIFICATION_RESULTS.md) để đọc các ca không phù hợp ngữ nghĩa, giới hạn và việc chưa thực hiện. Snapshot mục 8 được giữ nguyên theo ngày ghi nhận.

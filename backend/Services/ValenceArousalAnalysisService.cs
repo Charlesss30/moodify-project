@@ -57,12 +57,12 @@ public sealed class ValenceArousalAnalysisService(
         catch (TaskCanceledException) when (!ct.IsCancellationRequested) { return new([], null); }
     }
 
-    public async Task<ValenceArousalActivation> ActivateModelAsync(string version, CancellationToken ct)
+    public async Task<ValenceArousalActivation> ActivateModelAsync(string version, CancellationToken ct, string? expectedFingerprint=null)
     {
         try
         {
             using var response = await clients.CreateClient("ValenceArousalInference")
-                .PostAsJsonAsync("models/va/activate", new { version }, ct);
+                .PostAsJsonAsync("models/va/activate", new { version, expected_fingerprint=expectedFingerprint }, ct);
             var result = await response.Content.ReadFromJsonAsync<VaActivation>(cancellationToken: ct);
             return new((int)response.StatusCode, result?.Message ?? result?.Detail, result?.ActiveVersion, result?.Device);
         }

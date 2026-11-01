@@ -1,0 +1,740 @@
+[
+  {
+    "id": "vi-edge-01",
+    "language": "vi",
+    "text": "Tôi thấy bạn tôi đang buồn.",
+    "mood": null,
+    "contextMood": null,
+    "category": "ownership",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-01",
+    "language": "en",
+    "text": "I can see my friend is sad.",
+    "mood": null,
+    "contextMood": null,
+    "category": "ownership",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-02",
+    "language": "vi",
+    "text": "Bạn tôi buồn còn tôi đang vui.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "ownership",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-02",
+    "language": "en",
+    "text": "My friend is sad and I feel happy.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "ownership",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-03",
+    "language": "vi",
+    "text": "Tôi vui còn cô ấy đang buồn.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "ownership",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-03",
+    "language": "en",
+    "text": "I am happy while she feels sad.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "ownership",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-04",
+    "language": "vi",
+    "text": "Mẹ tôi vui còn tôi buồn.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "ownership",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-04",
+    "language": "en",
+    "text": "My mother is happy and I am sad.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "ownership",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-05",
+    "language": "vi",
+    "text": "Tôi nghe cô ấy kể chuyện buồn nhưng tôi đang vui.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "ownership",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-05",
+    "language": "en",
+    "text": "I heard her sad story but I feel happy.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "ownership",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-06",
+    "language": "vi",
+    "text": "Bộ phim buồn đó làm tôi thấy vui.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "reaction",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-06",
+    "language": "en",
+    "text": "That sad movie makes me feel happy.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "reaction",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-07",
+    "language": "vi",
+    "text": "Bài hát vui đó làm tôi buồn.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "reaction",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-07",
+    "language": "en",
+    "text": "That happy song makes me feel sad.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "reaction",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-08",
+    "language": "vi",
+    "text": "Tôi buồn vì bài hát vui này.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "content_subject",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-08",
+    "language": "en",
+    "text": "I feel sad about this happy song.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "content_subject",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-09",
+    "language": "vi",
+    "text": "Tôi vui khi xem bộ phim buồn.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "content_subject",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-09",
+    "language": "en",
+    "text": "I am happy watching a sad movie.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "content_subject",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-10",
+    "language": "vi",
+    "text": "Tôi đang buồn ngủ.",
+    "mood": null,
+    "contextMood": null,
+    "category": "non_mood",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-10",
+    "language": "en",
+    "text": "I am sleepy.",
+    "mood": null,
+    "contextMood": null,
+    "category": "non_mood",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-11",
+    "language": "vi",
+    "text": "Tôi đang buồn nôn.",
+    "mood": null,
+    "contextMood": null,
+    "category": "non_mood",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-11",
+    "language": "en",
+    "text": "I feel nauseous.",
+    "mood": null,
+    "contextMood": null,
+    "category": "non_mood",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-12",
+    "language": "vi",
+    "text": "Chúc mừng sinh nhật!",
+    "mood": null,
+    "contextMood": null,
+    "category": "non_mood",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-12",
+    "language": "en",
+    "text": "Happy birthday!",
+    "mood": null,
+    "contextMood": null,
+    "category": "non_mood",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-13",
+    "language": "vi",
+    "text": "Vui lòng gợi ý nhạc.",
+    "mood": null,
+    "contextMood": null,
+    "category": "non_mood",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-13",
+    "language": "en",
+    "text": "Please suggest some music.",
+    "mood": null,
+    "contextMood": null,
+    "category": "non_mood",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-14",
+    "language": "vi",
+    "text": "Lúc sáng tôi buồn nhưng bây giờ tôi vui.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "past_current",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-14",
+    "language": "en",
+    "text": "I felt sad earlier but now I am happy.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "past_current",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-15",
+    "language": "vi",
+    "text": "Hôm qua tôi buồn còn hôm nay tôi vui.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "past_current",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-15",
+    "language": "en",
+    "text": "I was sad yesterday and today I feel happy.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "past_current",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-16",
+    "language": "vi",
+    "text": "Hôm nay tôi vui vì hôm qua chuyện buồn đã qua.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "past_current",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-16",
+    "language": "en",
+    "text": "I am happy today because I was sad yesterday.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "past_current",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-17",
+    "language": "vi",
+    "text": "Hôm nay tôi nghĩ ngày mai tôi sẽ vui.",
+    "mood": null,
+    "contextMood": null,
+    "category": "future_state",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-17",
+    "language": "en",
+    "text": "Today I think I will be happy tomorrow.",
+    "mood": null,
+    "contextMood": null,
+    "category": "future_state",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-18",
+    "language": "vi",
+    "text": "Tôi buồn nhưng ngày mai tôi sẽ vui.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "future_state",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-18",
+    "language": "en",
+    "text": "I am sad but I will be happy tomorrow.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "future_state",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-19",
+    "language": "vi",
+    "text": "Tôi đang hào hứng về chuyến đi ngày mai.",
+    "mood": "Excited",
+    "contextMood": "Excited",
+    "category": "future_event",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-19",
+    "language": "en",
+    "text": "I am excited about tomorrow's trip.",
+    "mood": "Excited",
+    "contextMood": "Excited",
+    "category": "future_event",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-20",
+    "language": "vi",
+    "text": "Tôi buồn vì đã mất việc hôm qua.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "current_cause",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-20",
+    "language": "en",
+    "text": "I feel sad because I was fired yesterday.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "current_cause",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-21",
+    "language": "vi",
+    "text": "Tôi không thấy buồn và đang vui.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "negation_scope",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-21",
+    "language": "en",
+    "text": "I am not sad and I feel happy.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "negation_scope",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-22",
+    "language": "vi",
+    "text": "Tôi chẳng còn buồn, bây giờ tôi rất vui.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "negation_scope",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-22",
+    "language": "en",
+    "text": "I am no longer sad, I feel happy now.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "negation_scope",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-23",
+    "language": "vi",
+    "text": "Tôi không muốn giả vờ vui.",
+    "mood": null,
+    "contextMood": null,
+    "category": "negation_scope",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-23",
+    "language": "en",
+    "text": "I do not want to pretend I am happy.",
+    "mood": null,
+    "contextMood": null,
+    "category": "negation_scope",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-24",
+    "language": "vi",
+    "text": "Tôi vui nhưng cũng rất buồn.",
+    "mood": null,
+    "contextMood": null,
+    "category": "mixed",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-24",
+    "language": "en",
+    "text": "I feel happy but also very sad.",
+    "mood": null,
+    "contextMood": null,
+    "category": "mixed",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-25",
+    "language": "vi",
+    "text": "Tôi buồn và rất lo lắng.",
+    "mood": null,
+    "contextMood": null,
+    "category": "mixed",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-25",
+    "language": "en",
+    "text": "I am sad and very anxious.",
+    "mood": null,
+    "contextMood": null,
+    "category": "mixed",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-26",
+    "language": "vi",
+    "text": "Nếu tôi buồn thì tôi muốn nhạc vui.",
+    "mood": null,
+    "contextMood": null,
+    "category": "hypothesis",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-26",
+    "language": "en",
+    "text": "If I feel sad I want happy music.",
+    "mood": null,
+    "contextMood": null,
+    "category": "hypothesis",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-27",
+    "language": "vi",
+    "text": "Tôi tưởng tượng mình đang vui.",
+    "mood": null,
+    "contextMood": null,
+    "category": "hypothesis",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-27",
+    "language": "en",
+    "text": "I imagine I am happy.",
+    "mood": null,
+    "contextMood": null,
+    "category": "hypothesis",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-28",
+    "language": "vi",
+    "text": "Tôi đang buồn, hãy gợi ý nhạc vui cho tôi.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "request",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-28",
+    "language": "en",
+    "text": "I am sad, please recommend a cheerful song.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "request",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-29",
+    "language": "vi",
+    "text": "Tôi muốn một bộ phim vì tôi đang buồn.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "request",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-29",
+    "language": "en",
+    "text": "I want a film because I feel sad.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "request",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-30",
+    "language": "vi",
+    "text": "Tôi vui quá 🙄.",
+    "mood": null,
+    "contextMood": null,
+    "category": "sarcasm",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-30",
+    "language": "en",
+    "text": "Yeah right, I am happy 🙄.",
+    "mood": null,
+    "contextMood": null,
+    "category": "sarcasm",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-31",
+    "language": "vi",
+    "text": "  HÔM NAY TÔI VUI!!!  ",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "formatting",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-31",
+    "language": "en",
+    "text": "  I FEEL HAPPY TODAY!!!  ",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "formatting",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-32",
+    "language": "vi",
+    "text": "Tôi đang buồn.\nBạn có thể gợi ý nhạc không?",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "formatting",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-32",
+    "language": "en",
+    "text": "I feel sad.\nCan you recommend music?",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "formatting",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-33",
+    "language": "vi",
+    "text": "Buồn quá.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "short",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-33",
+    "language": "en",
+    "text": "So sad.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "short",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-34",
+    "language": "vi",
+    "text": "Vui quá.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "short",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-34",
+    "language": "en",
+    "text": "So happy.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "short",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-35",
+    "language": "vi",
+    "text": "Bạn đang buồn phải không?",
+    "mood": null,
+    "contextMood": null,
+    "category": "ownership",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-35",
+    "language": "en",
+    "text": "You feel sad, don't you?",
+    "mood": null,
+    "contextMood": null,
+    "category": "ownership",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-36",
+    "language": "vi",
+    "text": "Đồng nghiệp của tôi đang buồn.",
+    "mood": null,
+    "contextMood": null,
+    "category": "ownership",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-36",
+    "language": "en",
+    "text": "My coworker is sad.",
+    "mood": null,
+    "contextMood": null,
+    "category": "ownership",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-37",
+    "language": "vi",
+    "text": "Tôi không thể cảm thấy vui.",
+    "mood": null,
+    "contextMood": null,
+    "category": "negation_scope",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-37",
+    "language": "en",
+    "text": "I cannot feel happy.",
+    "mood": null,
+    "contextMood": null,
+    "category": "negation_scope",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-38",
+    "language": "vi",
+    "text": "Tôi chỉ giả vờ vui.",
+    "mood": null,
+    "contextMood": null,
+    "category": "hypothesis",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-38",
+    "language": "en",
+    "text": "I am just pretending to be happy.",
+    "mood": null,
+    "contextMood": null,
+    "category": "hypothesis",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-39",
+    "language": "vi",
+    "text": "Mình đang giả vờ buồn.",
+    "mood": null,
+    "contextMood": null,
+    "category": "hypothesis",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-edge-39",
+    "language": "en",
+    "text": "I am pretending I feel sad.",
+    "mood": null,
+    "contextMood": null,
+    "category": "hypothesis",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-edge-40",
+    "language": "vi",
+    "text": "Bạn nghe này, tôi đang vui.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "ownership",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-40",
+    "language": "en",
+    "text": "Listen, I feel happy.",
+    "mood": "Happy",
+    "contextMood": "Happy",
+    "category": "ownership",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-edge-41",
+    "language": "vi",
+    "text": "Bản thân đang buồn.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "ownership",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-edge-41",
+    "language": "en",
+    "text": "I feel sad.",
+    "mood": "Sad",
+    "contextMood": "Sad",
+    "category": "ownership",
+    "expectAbstain": false
+  }
+]

@@ -4,7 +4,7 @@ import fs from 'node:fs'
 const browser=await chromium.launch({channel:'msedge',headless:true})
 const id='11dFghVXANMlKmJXsNCbNl'
 try {
-  fs.mkdirSync('../docs/screenshots',{recursive:true})
+  fs.mkdirSync('../.local-build/browser-smoke',{recursive:true})
   const context=await browser.newContext({viewport:{width:1365,height:1000}})
   // Avoid depending on third-party playback/network in this deterministic UI test.
   await context.route('https://open.spotify.com/embed/**',route=>route.fulfill({contentType:'text/html',body:'<p>Spotify iframe fixture (UI test)</p>'}))
@@ -77,12 +77,12 @@ try {
   assert.equal(await page.locator('.tmdb-section').getAttribute('open'),null)
   const footer=await page.locator('.editor-modal .modal-actions').boundingBox()
   assert.ok(footer.y>=0 && footer.y+footer.height<=1000)
-  await page.screenshot({path:'../docs/screenshots/movie-edit-compact-desktop.png'})
+  await page.screenshot({path:'../.local-build/browser-smoke/movie-edit-compact-desktop.png'})
   await page.setViewportSize({width:390,height:700})
   const small=await page.locator('.editor-modal').boundingBox()
   const actions=await page.locator('.editor-modal .modal-actions').boundingBox()
   assert.ok(small.width<=390 && actions.y+actions.height<=700)
-  await page.screenshot({path:'../docs/screenshots/movie-edit-compact-mobile.png'})
+  await page.screenshot({path:'../.local-build/browser-smoke/movie-edit-compact-mobile.png'})
   await page.setViewportSize({width:1365,height:1000})
   await page.locator('#editor-form [name=rating]').fill('8.2')
   assert.equal(await page.locator('#editor-form [name=ratingSource]').inputValue(),'Manual')
@@ -98,7 +98,7 @@ try {
   assert.equal(await page.locator('.music-dialog a').count(),1)
   assert.equal(await page.locator('.music-detail-grid').count(),1)
   assert.equal(await frame.getAttribute('src'),'https://open.spotify.com/embed/track/'+id)
-  await page.screenshot({path:'../docs/screenshots/music-details-compact.png'})
+  await page.screenshot({path:'../.local-build/browser-smoke/music-details-compact.png'})
   await page.locator('.music-dialog [data-close]').click()
   assert.equal(await page.locator('iframe').count(),0)
   assert.equal(await page.locator('[data-tab=spotify]').count(),0)
@@ -133,7 +133,7 @@ try {
   assert.deepEqual(payload.songIds,[id]);assert.ok(payload.tamTrangID>0)
   await page.locator('[data-preview]').click()
   await page.locator('#spotify-preview iframe').waitFor()
-  await page.screenshot({path:'../docs/screenshots/spotify-admin-fixture.png',fullPage:true})
+  await page.screenshot({path:'../.local-build/browser-smoke/spotify-admin-fixture.png',fullPage:true})
   await page.keyboard.press('Escape')
   await page.locator('.spotify-import-dialog').waitFor({state:'detached'})
   await page.locator('[data-tab=overview]').click()
@@ -141,9 +141,10 @@ try {
   await page.locator('[data-tab=models]').click()
   await page.getByRole('heading',{name:'AI model registry'}).waitFor()
   assert.equal(await page.locator('#mapping-approve,#model-test').count(),0)
-  assert.equal(await page.locator('.sidebar [data-tab]').count(),9)
+  assert.deepEqual(await page.locator('.sidebar [data-tab]').evaluateAll(nodes => nodes.map(n => n.dataset.tab).sort()),
+    ['overview','genres','movies','music','users','moods','feedback','recommend','models'].sort())
   assert.equal(await page.locator('[data-tab=aiTraining],[data-tab=aiDatasets],[data-tab=history],[data-tab=aiAudit]').count(),0)
-  await page.screenshot({path:'../docs/screenshots/admin-role-menu.png'})
+  await page.screenshot({path:'../.local-build/browser-smoke/admin-role-menu.png'})
   await page.locator('[data-tab=users]').click()
   await page.locator('[data-user-activity]').first().click()
   await page.locator('dialog [data-page]').filter({hasText:'results'}).waitFor()
@@ -162,8 +163,32 @@ try {
   await page.locator('#login-form [type=submit]').click()
   await page.getByRole('heading',{name:'AI overview',exact:true}).waitFor()
   assert.equal(await page.locator('[data-tab=users],[data-tab=movies],[data-tab=music]').count(),0)
-  assert.equal(await page.locator('.sidebar [data-tab]').count(),9)
-  await page.screenshot({path:'../docs/screenshots/ai-engineer-overview.png',fullPage:true})
+  assert.deepEqual(await page.locator('.sidebar [data-tab]').evaluateAll(nodes => nodes.map(n => n.dataset.tab).sort()),
+    ['aiOverview','vaModels','viModels','models','aiMapping','aiEvaluation','aiDatasets','aiTraining','aiFeedback','aiTest','recommend'].sort())
+  await page.screenshot({path:'../.local-build/browser-smoke/ai-engineer-overview.png',fullPage:true})
+  await page.locator('[data-tab=viModels]').click()
+  const qualityPanel=page.locator('[data-ai-tool=quality]')
+  await qualityPanel.getByRole('heading',{name:'Model promotion · reviewed quality evidence'}).waitFor()
+  await qualityPanel.locator('details summary').first().click()
+  await qualityPanel.locator('[name=reason]').fill('Synthetic UI policy exercise; not independently measured model quality.')
+  const [qualityPolicySaved]=await Promise.all([
+    page.waitForResponse(r=>r.url().endsWith('/api/ModelQuality/policies') && r.request().method()==='POST'),
+    qualityPanel.locator('[data-quality-policy] [type=submit]').click(),
+  ])
+  assert.equal(qualityPolicySaved.status(),201)
+  assert.equal((await qualityPolicySaved.json()).minimumTestSamples,50)
+  await page.locator('[data-tab=aiTest]').click()
+  await page.locator('#bilingual-test').waitFor()
+  await page.route('**/api/MoodAnalysis/valence-arousal', route => route.fulfill({contentType:'application/json',body:JSON.stringify({
+    status:'matched',language:'vi',modelVersion:'phobert_browser_fixture',accepted:true,
+    modelType:'emotion_classification_va_adapter',mappingVersion:'vsmec-anchors-v1-nearest-center-v1',
+    valence:.6,arousal:.7,mood:{tamTrangID:1,tenTamTrang:'Happy'},analysisId:'va_'+ 'a'.repeat(32)
+  })}))
+  await page.locator('#bilingual-test [name=text]').fill('Tôi đang vui')
+  await page.locator('#bilingual-test [type=submit]').click()
+  await page.locator('#bilingual-output').filter({hasText:'phobert_browser_fixture'}).waitFor()
+  assert.ok((await page.locator('#bilingual-output').innerText()).includes('emotion_classification_va_adapter'))
+  await page.unroute('**/api/MoodAnalysis/valence-arousal')
   await page.locator('[data-tab=aiDatasets]').click()
   await page.locator('#dataset-create').waitFor()
   const rows=Array.from({length:402},(_,i)=>({text:'Browser fixture English sentence '+i,labels:['joy'],split:i===0?'train':i===401?'test':'validation'}))
@@ -172,6 +197,27 @@ try {
   await page.locator('#dataset-create [name=file]').setInputFiles({name:'samples.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(rows))})
   await page.locator('#dataset-create [type=submit]').click()
   await page.locator('td').filter({hasText:'Browser training dataset'}).waitFor()
+  // Typed VSMEC data uses its own reviewed schema; the legacy ASL data stays separate.
+  const typed = page.locator('[data-ai-tool=typed]')
+  await typed.locator('details summary').first().click()
+  const typedForm = page.locator('[data-typed-dataset]')
+  await typedForm.locator('[name=name]').fill('Browser VSMEC typed fixture')
+  await typedForm.locator('[name=source]').fill('Synthetic software fixture; not independent quality labels')
+  await typedForm.locator('[name=annotationMethod]').fill('Synthetic reviewed schema fixture; immutable explicit splits')
+  await typedForm.locator('[name=rows]').setInputFiles({
+    name:'typed-rows.json',mimeType:'application/json',
+    buffer:Buffer.from(JSON.stringify([
+      {id:'v1',split:'train',reviewed:true,text:'Mẫu một vui vẻ',emotion:'Enjoyment'},
+      {id:'v2',split:'validation',reviewed:true,text:'Mẫu hai buồn bã',emotion:'Sadness'},
+      {id:'v3',split:'test',reviewed:true,text:'Mẫu ba lo sợ',emotion:'Fear'},
+    ]))
+  })
+  const [typedRegistered] = await Promise.all([
+    page.waitForResponse(r=>r.url().endsWith('/api/AiExperiments/datasets') && r.request().method()==='POST'),
+    typedForm.locator('[type=submit]').click(),
+  ])
+  assert.equal(typedRegistered.status(),201)
+  await typed.getByText('Browser VSMEC typed fixture',{exact:true}).waitFor()
   await page.locator('[data-tab=aiTraining]').click()
   await page.locator('#job-create [name=datasetId]').selectOption({label:'Browser training dataset (402)'})
   await page.locator('#job-create [name=modelVersion]').fill('browser_asl_02')
@@ -185,6 +231,19 @@ try {
   await page.locator('td').filter({hasText:/^running$/}).waitFor()
   await page.locator('[data-state=cancelled]').click()
   await page.locator('td').filter({hasText:/^cancelled$/}).waitFor()
+  const typedJob = page.locator('[data-typed-job]')
+  await typedJob.locator('[name=modelVersion]').fill('browser_vsmec_typed')
+  await typedJob.locator('[name=baseVersion]').fill('phobert_fixture')
+  const [typedPrepared] = await Promise.all([
+    page.waitForResponse(r=>r.url().endsWith('/api/AiExperiments/jobs') && r.request().method()==='POST'),
+    typedJob.locator('[type=submit]').click(),
+  ])
+  assert.equal(typedPrepared.status(),201)
+  await page.locator('[data-typed-bundle]').waitFor()
+  const [typedDownload] = await Promise.all([page.waitForEvent('download'),page.locator('[data-typed-bundle]').click()])
+  const typedBundle = JSON.parse(fs.readFileSync(await typedDownload.path(),'utf8'))
+  assert.equal(JSON.parse(typedBundle.configJson).taskType,'vsmec7')
+  assert.equal(JSON.parse(typedBundle.datasetJson).length,3)
   await page.locator('[data-tab=aiMapping]').click()
   await page.locator('#mapping-approve').waitFor()
   assert.equal(await page.locator('#model-test').count(),0)
@@ -193,7 +252,24 @@ try {
   const mappingSaved=page.waitForResponse(r=>r.url().endsWith('/api/Models/mapping') && r.request().method()==='PUT')
   await page.locator('#mapping-approve button[type=submit]').click()
   assert.equal((await mappingSaved).status(),200)
-  await page.getByRole('heading',{name:'Emotion mapping',exact:true}).waitFor()
+  await page.getByRole('heading',{name:'GoEmotions mapping',exact:true}).waitFor()
+  const policies = page.locator('[data-ai-tool=policies]')
+  await policies.locator('details summary').click()
+  await policies.locator('[name=reason]').fill('Reviewed browser policy fixture; anchors unchanged')
+  await policies.locator('[data-policy-create] [type=submit]').click()
+  await policies.locator('[data-policy-approve]').waitFor()
+  const [approved] = await Promise.all([
+    page.waitForResponse(r=>/\/api\/AiPolicies\/[^/]+\/activate$/.test(r.url()) && r.request().method()==='POST'),
+    policies.locator('[data-policy-approve]').click(),
+  ])
+  assert.equal(approved.status(),200)
+  await policies.locator('tr:has([data-policy-reset=vi]) td').nth(2).filter({hasText:/^1$/}).waitFor()
+  const [reset] = await Promise.all([
+    page.waitForResponse(r=>r.url().endsWith('/api/AiPolicies/vi/reset') && r.request().method()==='POST'),
+    policies.locator('[data-policy-reset=vi]').click(),
+  ])
+  assert.equal(reset.status(),200)
+
   await page.locator('[data-tab=models]').click()
   await page.getByText('mapping_approve',{exact:true}).waitFor()
   assert.equal(await page.locator('#mapping-approve').count(),0)
@@ -201,7 +277,18 @@ try {
   await page.locator('#recommend-form').waitFor()
   await page.locator('[data-tab=aiFeedback]').click()
   await page.locator('[data-export-feedback]').waitFor()
-  await page.screenshot({path:'../docs/screenshots/ai-engineer-feedback.png',fullPage:true})
+  await page.locator('[data-ai-tool=mf]').getByRole('heading',{name:'Matrix Factorization registry'}).waitFor()
+  const bandit = page.locator('[data-ai-tool=bandit]')
+  await bandit.locator('details summary').click()
+  assert.equal(await bandit.locator('[name=enabled]').isChecked(),false)
+  await bandit.locator('[name=reviewEvidence]').fill('Synthetic browser fixture; pilot remains off; no production experiment')
+  const [configured] = await Promise.all([
+    page.waitForResponse(r=>r.url().endsWith('/api/RecommendationExperiments') && r.request().method()==='POST'),
+    bandit.locator('[type=submit]').click(),
+  ])
+  assert.equal(configured.status(),200)
+  assert.equal((await configured.json()).enabled,false)
+  await page.screenshot({path:'../.local-build/browser-smoke/ai-engineer-feedback.png',fullPage:true})
   assert.deepEqual(errors,[])
   console.log('PASS: admin Spotify UI (fixture search/import/player), real login/catalog/mood APIs, Premium error, required mood, duplicate state and player cleanup.')
   await context.close()

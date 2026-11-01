@@ -15,10 +15,18 @@ namespace mood_recommendation.Models
         [BsonElement("recommendationId")] public string? RecommendationId { get; set; }
         [BsonElement("recommendedItems")] public List<RecommendationSnapshot>? RecommendedItems { get; set; }
         [BsonElement("algorithm")] public string? Algorithm { get; set; }
+        [BsonElement("collaborativeModelVersion")] public string? CollaborativeModelVersion { get; set; }
+        [BsonElement("experimentId")] public string? ExperimentId { get; set; }
+        [BsonElement("strategyArm")] public string? StrategyArm { get; set; }
         [BsonElement("source")] public string? Source { get; set; }
         [BsonElement("analysisId")] public string? AnalysisId { get; set; }
         [BsonElement("analyzerVersion")] public string? AnalyzerVersion { get; set; }
         [BsonElement("mappingVersion")] public string? MappingVersion { get; set; }
+        [BsonElement("analysisLanguage")] public string? AnalysisLanguage { get; set; }
+        [BsonElement("analysisModelType")] public string? AnalysisModelType { get; set; }
+        [BsonElement("routingVersion")] public string? RoutingVersion { get; set; }
+        [BsonElement("analysisValence")] public decimal? AnalysisValence { get; set; }
+        [BsonElement("analysisArousal")] public decimal? AnalysisArousal { get; set; }
         [BsonElement("analysisSource")] public string? AnalysisSource { get; set; }
         [BsonElement("decisionSource")] public string? DecisionSource { get; set; }
         [BsonElement("moodConfigHash")] public string? MoodConfigHash { get; set; }

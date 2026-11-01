@@ -70,18 +70,6 @@ class _AppFlowCoordinatorState extends State<AppFlowCoordinator> {
     super.initState();
     ApiService.onUnauthorized = _expireSession;
     PushNotifications.onOpen = _openNotification;
-    PushNotifications.onForeground = (title, body, screen) {
-      if (!mounted || _currentView != 'home') return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$title: $body'),
-          action: SnackBarAction(
-            label: 'Mở',
-            onPressed: () => _openNotification(screen),
-          ),
-        ),
-      );
-    };
   }
 
   void _openNotification(String screen) {
@@ -185,7 +173,6 @@ class _AppFlowCoordinatorState extends State<AppFlowCoordinator> {
   void dispose() {
     ApiService.onUnauthorized = null;
     PushNotifications.onOpen = null;
-    PushNotifications.onForeground = null;
     super.dispose();
   }
 }

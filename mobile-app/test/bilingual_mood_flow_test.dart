@@ -12,14 +12,28 @@ import 'package:moodify_application/services/mood_analysis/mood_analyzer.dart';
 import 'package:moodify_application/services/mood_analysis/mood_language.dart';
 
 Map<String, dynamic> prediction(String language, {bool accepted = true}) => {
-  'status': 'matched',
+  'status': accepted ? 'matched' : 'unknown',
+  'source': 'ai_va',
+  'inputScope': 'focused_self_description',
+  'analyzedCharacterCount': 14,
+  'accepted': accepted,
+  'requiresConfirmation': true,
+  'analysisId': accepted ? 'va_0123456789abcdef0123456789abcdef' : null,
+  'expiresAt': accepted ? '2099-01-01T00:00:00Z' : null,
+  'mappingVersion': 'fixture-policy-v1',
+  'modelType': language == 'vi'
+      ? 'emotion_classification_va_adapter'
+      : 'valence_arousal_regression',
+  'scoreType': language == 'vi'
+      ? 'softmax_not_accuracy'
+      : 'regression_coordinates',
   'language': language,
   'modelVersion': language == 'vi'
       ? 'phobert_vsmec_v2'
       : 'roberta_va_regression',
   'valence': 0.734,
   'arousal': -0.219,
-  'mood': {'tamTrangID': 5, 'tenTamTrang': 'Happy'},
+  'mood': accepted ? {'tamTrangID': 5, 'tenTamTrang': 'Happy'} : null,
   if (language == 'vi') ...{
     'emotion': 'Enjoyment',
     'confidence': accepted ? 0.94 : 0.42,
@@ -43,6 +57,7 @@ http.Response jsonResponse(Object data, [int status = 200]) => http.Response(
 void installGateway({
   required Future<http.Response> Function(http.Request) analyze,
   void Function(Map<String, dynamic>)? recommend,
+  Future<http.Response> Function(Map<String, dynamic>)? recommendAsync,
 }) {
   ApiService.clientFactory = () => MockClient((request) async {
     if (request.url.path.endsWith('/MoodMapping')) {
@@ -61,6 +76,11 @@ void installGateway({
       return analyze(request);
     }
     if (request.url.path.endsWith('/Recommendation')) {
+      if (recommendAsync != null) {
+        return recommendAsync(
+          jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, dynamic>,
+        );
+      }
       recommend?.call(
         jsonDecode(utf8.decode(request.bodyBytes)) as Map<String, dynamic>,
       );
@@ -75,12 +95,25 @@ void installGateway({
   });
 }
 
-Future<void> openDiscovery(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(390, 1100);
+Future<void> openDiscovery(
+  WidgetTester tester, {
+  double width = 390,
+  double textScale = 1,
+}) async {
+  tester.view.physicalSize = Size(width, 1100);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
-  await tester.pumpWidget(const MaterialApp(home: MoodDiscoveryScreen()));
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
+      home: const MoodDiscoveryScreen(),
+    ),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -92,20 +125,34 @@ Future<void> analyzeText(WidgetTester tester, String text) async {
   await tester.pumpAndSettle();
   await tester.tap(button);
   await tester.pumpAndSettle();
-  final details = find.text('Thông tin phân tích');
-  if (details.evaluate().isNotEmpty &&
-      find.textContaining('Phiên bản:').evaluate().isEmpty) {
-    await tester.ensureVisible(details);
-    await tester.pumpAndSettle();
-    await tester.tap(details);
-    await tester.pumpAndSettle();
-  }
 }
 
 void main() {
   tearDown(() {
     ApiService.clientFactory = http.Client.new;
     ApiService.logout();
+  });
+
+  test('high model confidence with negation conflict is a clarification, not low confidence', () {
+    final payload = prediction('vi', accepted: false)
+      ..['reasonCode'] = 'negation_model_conflict'
+      ..['mappingMethod'] = 'needs_clarification'
+      ..['confidence'] = .868
+      ..['emotion'] = 'Sadness'
+      ..['emotionCandidates'] = [
+        {'label': 'Sadness', 'score': .868},
+        {'label': 'Other', 'score': .08},
+      ];
+    final result = MoodAnalysisResult.fromVaApi(
+      payload,
+      expectedLanguage: 'auto',
+    );
+    expect(result.label, 'Cần làm rõ cảm xúc hiện tại');
+    expect(result.status, MoodAnalysisStatus.unknown);
+    expect(result.confidence, .868);
+    expect(result.reasonCode, 'negation_model_conflict');
+    expect(result.analysisId, isNull);
+    expect(result.moodId, isNull);
   });
 
   test(
@@ -182,45 +229,138 @@ void main() {
     );
   });
 
-  for (final language in ['vi', 'en']) {
-    testWidgets('$language uses deployed gateway and forwards exact model VA', (
-      tester,
-    ) async {
-      final analyses = <Map<String, dynamic>>[];
-      final recommendations = <Map<String, dynamic>>[];
-      installGateway(
-        analyze: (request) async {
-          expect(request.headers['content-type'], contains('utf-8'));
-          final body = jsonDecode(
-            utf8.decode(request.bodyBytes),
-          ) as Map<String, dynamic>;
-          analyses.add(body);
-          return jsonResponse(prediction(body['language'] as String));
+  test(
+    'rejects malformed receipts and mood fields without a runtime type error',
+    () {
+      for (final fields in <Map<String, dynamic>>[
+        {'analysisId': null},
+        {'analysisId': 'forged'},
+        {'mappingVersion': 1},
+        {'accepted': false},
+        {
+          'mood': {'tamTrangID': 5.5, 'tenTamTrang': 'Happy'},
         },
-        recommend: recommendations.add,
-      );
-      await openDiscovery(tester);
-      final text = language == 'vi'
-          ? 'Hôm nay tôi thấy rất vui.'
-          : 'I feel happy today.';
-      await analyzeText(tester, text);
-      expect(analyses.single, {'text': text, 'language': language});
-      final version = language == 'vi'
-          ? 'phobert_vsmec_v2'
-          : 'roberta_va_regression';
-      expect(find.text('Phiên bản: $version'), findsOneWidget);
-      final confirm = find.text('Xác nhận và nhận gợi ý');
-      await tester.ensureVisible(confirm);
-      await tester.pumpAndSettle();
-      await tester.tap(confirm);
-      await tester.pumpAndSettle();
-      expect(recommendations.single['source'], 'ai_va');
-      expect(recommendations.single['valence'], 0.734);
-      expect(recommendations.single['arousal'], -0.219);
-      expect(recommendations.single['modelVersion'], version);
-      expect(recommendations.single['analysisId'], isNull);
-      expect(tester.takeException(), isNull);
-    });
+        {
+          'mood': {'tamTrangID': 5, 'tenTamTrang': 3},
+        },
+        {'confidence': 0.9},
+        {'reasonCode': 1},
+      ]) {
+        expect(
+          () => MoodAnalysisResult.fromVaApi({
+            ...prediction('en'),
+            ...fields,
+          }, expectedLanguage: 'auto'),
+          throwsFormatException,
+        );
+      }
+    },
+  );
+
+  for (final item in <(String, String)>[
+    ('low_confidence', 'Bạn có thể tự chọn cảm xúc'),
+    ('negation_model_conflict', 'Chưa rõ cảm xúc của bạn'),
+    ('mixed_emotions', 'Bạn đang có nhiều cảm xúc'),
+    ('unsupported_emotion', 'Chưa có gợi ý phù hợp'),
+    ('uncertain_statement', 'Chưa rõ cảm xúc của bạn'),
+  ]) {
+    testWidgets(
+      'concise clarification for ${item.$1} fits narrow screen and large text',
+      (tester) async {
+        installGateway(
+          analyze: (_) async => jsonResponse(
+            prediction('vi', accepted: false)
+              ..['reasonCode'] = item.$1
+              ..['message'] = 'RAW_BACKEND_NEGATION_DETAILS'
+              ..['mappingMethod'] = 'needs_clarification',
+          ),
+        );
+        await openDiscovery(tester, width: 320, textScale: 1.4);
+        await analyzeText(tester, 'Hôm nay tôi không được vui.');
+        expect(find.text(item.$2), findsOneWidget);
+        if (item.$1 == 'low_confidence') {
+          expect(
+            find.text(
+              'AI chưa đủ chắc chắn. Chọn tâm trạng bên dưới để tiếp tục.',
+            ),
+            findsOneWidget,
+          );
+          expect(find.textContaining('Thử mô tả rõ hơn'), findsNothing);
+        }
+        expect(find.text('RAW_BACKEND_NEGATION_DETAILS'), findsNothing);
+        expect(find.text('Thông tin phân tích'), findsNothing);
+        expect(find.textContaining('Điểm tin cậy'), findsNothing);
+        expect(find.textContaining('Phiên bản:'), findsNothing);
+        expect(find.textContaining('phobert_vsmec_v2'), findsNothing);
+        expect(find.byType(DropdownButtonFormField<int>), findsOneWidget);
+        final confirm = find.widgetWithText(
+          FilledButton,
+          'Xác nhận và nhận gợi ý',
+        );
+        expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  for (final language in ['vi', 'en']) {
+    testWidgets(
+      '$language confirms with server receipt and no client model VA',
+      (tester) async {
+        final analyses = <Map<String, dynamic>>[];
+        final recommendations = <Map<String, dynamic>>[];
+        installGateway(
+          analyze: (request) async {
+            expect(request.headers['content-type'], contains('utf-8'));
+            final body = jsonDecode(
+              utf8.decode(request.bodyBytes),
+            ) as Map<String, dynamic>;
+            analyses.add(body);
+            expect(body['language'], 'auto');
+            return jsonResponse(
+              prediction(detectMoodLanguage(body['text'] as String)),
+            );
+          },
+          recommend: recommendations.add,
+        );
+        await openDiscovery(tester);
+        final text = language == 'vi'
+            ? 'Hôm nay tôi thấy rất vui.'
+            : 'I feel happy today.';
+        await analyzeText(tester, text);
+        expect(analyses.single, {'text': text, 'language': 'auto'});
+        final version = language == 'vi'
+            ? 'phobert_vsmec_v2'
+            : 'roberta_va_regression';
+        expect(
+          find.text(
+            language == 'vi'
+                ? 'Model: PhoBERT · Tiếng Việt'
+                : 'Model: RoBERTa VA · English',
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('Tâm trạng gợi ý'), findsOneWidget);
+        expect(find.text('Thông tin phân tích'), findsNothing);
+        expect(find.textContaining('Phiên bản:'), findsNothing);
+        expect(find.textContaining('Điểm tin cậy'), findsNothing);
+        expect(find.text(version), findsNothing);
+        final confirm = find.text('Xác nhận và nhận gợi ý');
+        await tester.ensureVisible(confirm);
+        await tester.pumpAndSettle();
+        await tester.tap(confirm);
+        await tester.pumpAndSettle();
+        expect(recommendations.single['source'], 'ai_va');
+        expect(recommendations.single.containsKey('valence'), isFalse);
+        expect(recommendations.single.containsKey('arousal'), isFalse);
+        expect(recommendations.single.containsKey('modelVersion'), isFalse);
+        expect(
+          recommendations.single['analysisId'],
+          'va_0123456789abcdef0123456789abcdef',
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   testWidgets(
@@ -233,7 +373,7 @@ void main() {
       );
       await openDiscovery(tester);
       await analyzeText(tester, 'Tôi vừa vui vừa lo lắng.');
-      expect(find.text('Chưa đủ tin cậy'), findsOneWidget);
+      expect(find.text('Chưa rõ cảm xúc của bạn'), findsOneWidget);
       final confirm = find.widgetWithText(
         FilledButton,
         'Xác nhận và nhận gợi ý',
@@ -251,6 +391,7 @@ void main() {
       await tester.tap(confirm);
       await tester.pumpAndSettle();
       expect(recommendations.single['source'], 'manual');
+      expect(find.text('Bạn đã chọn'), findsOneWidget);
       expect(recommendations.single.containsKey('valence'), isFalse);
       expect(recommendations.single.containsKey('modelVersion'), isFalse);
       expect(tester.takeException(), isNull);
@@ -266,7 +407,8 @@ void main() {
           final body = jsonDecode(
             utf8.decode(request.bodyBytes),
           ) as Map<String, dynamic>;
-          final language = body['language'] as String;
+          expect(body['language'], 'auto');
+          final language = detectMoodLanguage(body['text'] as String);
           sentLanguages.add(language);
           return jsonResponse(prediction(language));
         },
@@ -281,8 +423,8 @@ void main() {
 
       await tester.enterText(find.byType(TextField), 'I feel calm today.');
       await tester.pumpAndSettle();
-      expect(find.text('Model: RoBERTa VA · English'), findsOneWidget);
-      expect(find.text('Phiên bản: phobert_vsmec_v2'), findsNothing);
+      expect(find.text('Dự kiến: RoBERTa VA · English'), findsOneWidget);
+      expect(find.text('Model: PhoBERT · Tiếng Việt'), findsNothing);
       expect(
         tester
             .widget<FilledButton>(
@@ -293,7 +435,7 @@ void main() {
       );
       await analyzeText(tester, 'I feel calm today.');
       expect(sentLanguages, ['vi', 'en']);
-      expect(find.text('Phiên bản: roberta_va_regression'), findsOneWidget);
+      expect(find.text('Model: RoBERTa VA · English'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -307,7 +449,9 @@ void main() {
           final body = jsonDecode(
             utf8.decode(request.bodyBytes),
           ) as Map<String, dynamic>;
-          if (body['language'] == 'vi') return delayed.future;
+          if (detectMoodLanguage(body['text'] as String) == 'vi') {
+            return delayed.future;
+          }
           return jsonResponse(prediction('en'));
         },
       );
@@ -319,11 +463,11 @@ void main() {
       await tester.tap(find.text('Phân tích tâm trạng'));
       await tester.pump();
       await analyzeText(tester, 'I feel calm today.');
-      expect(find.text('Phiên bản: roberta_va_regression'), findsOneWidget);
+      expect(find.text('Model: RoBERTa VA · English'), findsOneWidget);
       delayed.complete(jsonResponse(prediction('vi')));
       await tester.pumpAndSettle();
-      expect(find.text('Phiên bản: phobert_vsmec_v2'), findsNothing);
-      expect(find.text('Phiên bản: roberta_va_regression'), findsOneWidget);
+      expect(find.text('Model: PhoBERT · Tiếng Việt'), findsNothing);
+      expect(find.text('Model: RoBERTa VA · English'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -340,7 +484,7 @@ void main() {
       await analyzeText(tester, 'Tôi thấy buồn');
       expect(
         find.text(
-          'Model tiếng Việt chưa sẵn sàng. Hãy thử lại sau hoặc chọn tâm trạng thủ công.',
+          'Chưa thể phân tích lúc này. Bạn có thể thử lại hoặc chọn tâm trạng bên dưới.',
         ),
         findsOneWidget,
       );

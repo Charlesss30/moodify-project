@@ -35,6 +35,16 @@ public sealed class FakeInferenceServer : IDisposable
 
     public Uri BaseAddress { get; }
     public string Scenario { get; set; } = "matched";
+    public string BilingualScenario { get; set; } = "matched";
+    public int BilingualStatusCode { get; set; } = 200;
+    public bool FingerprintTampered {get;set;}
+    public int ModelActivations {get;set;}
+    string _loadedFingerprint=new string('b',64);
+    public string VaVersion { get; set; } = "roberta_va_fixture";
+    public string ViVersion { get; set; } = "phobert_fixture";
+    private int _bilingualCalls;
+    public int BilingualCalls => _bilingualCalls;
+    public string? LastBilingualText { get; private set; }
     public int StatusCode { get; set; } = 200;
     public int DelayMilliseconds { get; set; }
 
@@ -60,6 +70,59 @@ public sealed class FakeInferenceServer : IDisposable
     {
         try
         {
+            var path = context.Request.Url?.AbsolutePath;
+            if(path is "/models/vi/lifecycle" or "/models/va/lifecycle"){
+                await WriteAsync(context.Response,new{active_version=path.Contains("/vi/")?ViVersion:VaVersion,
+                    previous_version="phobert_fixture",revision=0},cancellationToken);return;
+            }
+            if(path is not null&&path.Contains("/fingerprint/")){
+                var segments=path.Split('/');var kind=segments[2];var version=Uri.UnescapeDataString(segments[^1]);
+                var changed=FingerprintTampered&&version=="quality_fixture_candidate";
+                var bundle=new string(changed?'d':'b',64);
+                var active=version==(kind=="vi"?ViVersion:VaVersion);
+                await WriteAsync(context.Response,new{kind,version,bundleSha256=bundle,weightSha256=new string('a',64),
+                    active,activeBundleSha256=active?_loadedFingerprint:null,
+                    files=new[]{new{path="config.json",sha256=new string('c',64)},new{path="model.safetensors",sha256=new string('a',64)}}},cancellationToken);return;
+            }
+            if(path is "/models/vi/activate" or "/models/va/activate" or "/models/vi/rollback" or "/models/va/rollback"){
+                using var body=await JsonDocument.ParseAsync(context.Request.InputStream,cancellationToken:cancellationToken);
+                var version=path.EndsWith("rollback")?"phobert_fixture":body.RootElement.GetProperty("version").GetString()!;
+                ModelActivations++;
+                if(path.Contains("/vi/"))ViVersion=version;else VaVersion=version;
+                _loadedFingerprint=new string('b',64);
+                await WriteAsync(context.Response,new{status="ready",active_version=version,device="cpu",revision=1},cancellationToken);return;
+            }
+            if (path is "/health/va/ready" or "/health/vi/ready")
+            {
+                var vi = path.Contains("/vi/");
+                await WriteAsync(context.Response, new { status = "ready", language = vi ? "vi" : "en",
+                    model_version = vi ? ViVersion : VaVersion, inference_device = "cpu" }, cancellationToken);
+                return;
+            }
+            if (path is "/predict-vi" or "/predict-va")
+            {
+                Interlocked.Increment(ref _bilingualCalls);
+                using var input=await JsonDocument.ParseAsync(context.Request.InputStream,cancellationToken:cancellationToken);
+                LastBilingualText=input.RootElement.GetProperty("text").GetString();
+                if (BilingualStatusCode != 200) { context.Response.StatusCode = BilingualStatusCode; context.Response.Close(); return; }
+                if (BilingualScenario == "malformed") { await WriteAsync(context.Response, new { unexpected = true }, cancellationToken); return; }
+                var vi = path == "/predict-vi";
+                var negative = BilingualScenario is "negative" or "low_negative";
+                var payload = new Dictionary<string, object?> {
+                    ["model_version"] = BilingualScenario == "bad_version" ? "../bad" : vi ? ViVersion : VaVersion,
+                    ["language"] = BilingualScenario == "wrong_language" ? "fr" : vi ? "vi" : "en",
+                    ["valence"] = BilingualScenario == "out_of_range" ? 1.5 : negative ? -.71 : .734,
+                    ["arousal"] = negative ? -.44 : -.219
+                };
+                if (BilingualScenario == "missing_va") payload.Remove("valence");
+                if (vi) {
+                    payload["emotion"] = BilingualScenario == "bad_labels" ? "fake" : negative ? "Sadness" : "Enjoyment";
+                    payload["confidence"] = BilingualScenario == "bad_confidence" ? 1.5 : BilingualScenario=="low_negative" ? .6 : .94;
+                    payload["accepted"] = BilingualScenario is not ("low" or "low_negative");
+                    payload["emotion_candidates"] = new[] { new { label = negative ? "Sadness" : "Enjoyment", score = BilingualScenario=="low_negative" ? .6 : .94 }, new { label = "Other", score = .03 } };
+                }
+                await WriteAsync(context.Response, payload, cancellationToken); return;
+            }
             if (context.Request.Url?.AbsolutePath == "/health/ready")
             {
                 await WriteAsync(context.Response, new

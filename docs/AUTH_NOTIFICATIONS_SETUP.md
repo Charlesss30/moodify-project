@@ -223,3 +223,8 @@ Vẫn giữ `firebase_messaging_auto_init_enabled=false`, quyền hệ điều h
 Đối chiếu [Firebase Flutter FCM setup](https://firebase.google.com/docs/cloud-messaging/flutter/get-started) và [Android FirebaseMessaging.register](https://firebase.google.com/docs/reference/android/com/google/firebase/messaging/FirebaseMessaging#register()).
 
 Xác minh sau sửa: APK debug build thành công, kiểm tra Manifest trong APK có cờ FID `true` và auto-init vẫn `false`. Đã cài đè APK trên `emulator-5554`, mở lại app và gọi API native đăng ký FCM thật qua debugger: `register()` hoàn tất thành công; sau đó `unregister()` cũng thành công để gỡ đăng ký kiểm tra. Không gửi push hoặc chỉnh cài đặt nhận thông báo trong database. Cần đăng nhập lại sau khi app khởi động lại; người dùng có thể bật nhận và tự bấm Gửi thông báo thử. Kiểm tra này xác nhận đăng ký FCM native, chưa chứng minh gửi/nhận push trọn luồng từ backend.
+
+
+## Thông báo hệ thống khi app đang mở — 28/10/2026
+
+Đã bổ sung Android system notification cho foreground FCM, thay thanh SnackBar chứa nội dung push. Kênh mới hỗ trợ banner, bấm mở Khám phá/Thống kê, cùng message ID không tạo hai bản và tắt/đăng xuất dọn lời nhắc. Lịch gửi/opt-in giữ nguyên. Cần APK mới vì có Kotlin/Manifest; xem [hướng dẫn và bằng chứng kiểm thử](ANDROID_SYSTEM_NOTIFICATIONS.md).

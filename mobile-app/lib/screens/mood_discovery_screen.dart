@@ -31,11 +31,36 @@ class _MoodDiscoveryScreenState extends State<MoodDiscoveryScreen> {
   bool _analyzing = false;
   String? _analysisError;
   int _analysisRequestVersion = 0;
+  int _recommendationRequestVersion = 0;
+  ApiRequestCancellation? _analysisCancellation;
+  String? _submittedAnalysisId;
+  bool _recommendationNeedsAnalysis = false;
   String get _resolvedLanguage =>
       detectMoodLanguage(_descriptionController.text);
 
+  String get _modelHint {
+    if (_analysis?.status == MoodAnalysisStatus.unsupportedLanguage) {
+      return 'Chưa hỗ trợ ngôn ngữ này.';
+    }
+    if (_analyzing) return 'Đang nhận diện ngôn ngữ và phân tích…';
+    if (_descriptionController.text.trim().isEmpty) {
+      return 'Tự nhận diện tiếng Việt / English.';
+    }
+    final language = _analysis?.language ?? _resolvedLanguage;
+    final prefix = _analysis?.language == null ? 'Dự kiến' : 'Model';
+    return language == 'vi'
+        ? '$prefix: PhoBERT · Tiếng Việt'
+        : '$prefix: RoBERTa VA · English';
+  }
+
   void _invalidateAnalysis() {
+    _analysisCancellation?.cancel();
+    _analysisCancellation = null;
     _analysisRequestVersion++;
+    _recommendationRequestVersion++;
+    _requestingRecommendations = false;
+    _submittedAnalysisId = null;
+    _recommendationNeedsAnalysis = false;
     if (_analysis != null || _analyzing) _selectedMood = null;
     _analysis = null;
     _analysisError = null;
@@ -52,6 +77,7 @@ class _MoodDiscoveryScreenState extends State<MoodDiscoveryScreen> {
 
   @override
   void dispose() {
+    _analysisCancellation?.cancel();
     _descriptionController.dispose();
     super.dispose();
   }
@@ -79,14 +105,20 @@ class _MoodDiscoveryScreenState extends State<MoodDiscoveryScreen> {
   }
 
   Future<void> _analyzeDescription() async {
-    if (_analyzing || _loadingMoods) return;
+    if (_analyzing || _loadingMoods || _requestingRecommendations) return;
     final requestVersion = ++_analysisRequestVersion;
+    final cancellation = ApiRequestCancellation();
+    _analysisCancellation?.cancel();
+    _analysisCancellation = cancellation;
     setState(() {
       _analyzing = true;
       _analysisError = null;
       _analysis = null;
       _selectedMood = null;
       _recommendation = null;
+      _recommendError = null;
+      _recommendationNeedsAnalysis = false;
+      _submittedAnalysisId = null;
     });
     try {
       final text = _descriptionController.text.trim();
@@ -94,8 +126,10 @@ class _MoodDiscoveryScreenState extends State<MoodDiscoveryScreen> {
         setState(() => _analysisError = 'Hãy nhập mô tả tâm trạng trước.');
         return;
       }
-      final language = _resolvedLanguage;
-      final rawResult = await ApiService.analyzeMood(text, language: language);
+      final rawResult = await ApiService.analyzeMood(
+        text,
+        cancellation: cancellation,
+      );
       if (!mounted || requestVersion != _analysisRequestVersion) return;
       final mappedMood = rawResult.moodId == null
           ? null
@@ -109,27 +143,60 @@ class _MoodDiscoveryScreenState extends State<MoodDiscoveryScreen> {
         _analysis = rawResult;
         _selectedMood = mappedMood;
       });
+    } on ApiRequestCancelled {
+      // A newer description or manual choice owns the screen now.
     } on ApiException catch (error) {
       if (mounted && requestVersion == _analysisRequestVersion) {
         setState(() {
-          _analysisError = error.message;
+          _analysisError = error.statusCode == 503 || error.statusCode == 429
+              ? 'Chưa thể phân tích lúc này. Bạn có thể thử lại hoặc chọn tâm trạng bên dưới.'
+              : error.message;
           _analysis = null;
         });
       }
     } finally {
       if (mounted && requestVersion == _analysisRequestVersion) {
+        _analysisCancellation = null;
         setState(() => _analyzing = false);
       }
     }
   }
 
+  void _requireFreshAnalysis() {
+    setState(() {
+      _analysis = null;
+      _selectedMood = null;
+      _submittedAnalysisId = null;
+      _recommendation = null;
+      _recommendationNeedsAnalysis = true;
+      _recommendError = 'Kết quả phân tích đã hết hiệu lực. Hãy phân tích lại hoặc tự chọn tâm trạng bên dưới.';
+    });
+  }
+
   Future<void> _requestRecommendations() async {
     final mood = _selectedMood;
     if (_requestingRecommendations || mood == null) return;
+    final analysis = _analysis;
+    final useAi =
+        analysis?.source == MoodAnalysisSource.ai &&
+        analysis?.usesVaModel == true &&
+        analysis?.status == MoodAnalysisStatus.matched &&
+        analysis?.moodId == mood.id;
+    final expired =
+        analysis?.expiresAt != null &&
+        !analysis!.expiresAt!.isAfter(DateTime.now().toUtc());
+    if (useAi && expired) {
+      _requireFreshAnalysis();
+      return;
+    }
+    final requestVersion = ++_recommendationRequestVersion;
+    final originId = expired ? null : analysis?.analysisId;
     setState(() {
       _requestingRecommendations = true;
       _recommendError = null;
+      _recommendationNeedsAnalysis = false;
       _recommendation = null;
+      _submittedAnalysisId = originId;
     });
     try {
       final type = _recommendationType == 1
@@ -137,25 +204,25 @@ class _MoodDiscoveryScreenState extends State<MoodDiscoveryScreen> {
           : _recommendationType == 2
           ? 'Music'
           : null;
-      final analysis = _analysis;
-      final useAi =
-          analysis?.source == MoodAnalysisSource.ai &&
-          analysis?.usesVaModel == true &&
-          analysis?.status == MoodAnalysisStatus.matched &&
-          analysis?.moodId == mood.id;
       final result = await ApiService.recommend(
         mood.id,
         type,
         source: useAi ? 'ai_va' : 'manual',
-        valence: useAi ? analysis?.valence : null,
-        arousal: useAi ? analysis?.arousal : null,
-        modelVersion: useAi ? analysis?.analyzerVersion : null,
+        analysisId: originId,
       );
-      if (mounted) setState(() => _recommendation = result);
+      if (!mounted || requestVersion != _recommendationRequestVersion) return;
+      setState(() => _recommendation = result);
     } on ApiException catch (error) {
-      if (mounted) setState(() => _recommendError = error.message);
+      if (!mounted || requestVersion != _recommendationRequestVersion) return;
+      if (error.statusCode == 409 && originId != null) {
+        _requireFreshAnalysis();
+      } else {
+        setState(() => _recommendError = error.message);
+      }
     } finally {
-      if (mounted) setState(() => _requestingRecommendations = false);
+      if (mounted && requestVersion == _recommendationRequestVersion) {
+        setState(() => _requestingRecommendations = false);
+      }
     }
   }
 
@@ -219,11 +286,7 @@ class _MoodDiscoveryScreenState extends State<MoodDiscoveryScreen> {
                         decoration: InputDecoration(
                           labelText: 'Mô tả tâm trạng',
                           hintText: 'Hôm nay tôi thấy vui / I feel happy today',
-                          helperText: _descriptionController.text.trim().isEmpty
-                              ? 'Tự nhận diện tiếng Việt / English.'
-                              : _resolvedLanguage == 'vi'
-                              ? 'Model: PhoBERT · Tiếng Việt'
-                              : 'Model: RoBERTa VA · English',
+                          helperText: _modelHint,
                           helperStyle: const TextStyle(
                             fontSize: 12,
                             color: AppColors.textSecondary,
@@ -299,10 +362,22 @@ class _MoodDiscoveryScreenState extends State<MoodDiscoveryScreen> {
                   onChanged: _requestingRecommendations
                       ? null
                       : (id) => setState(() {
-                          _invalidateAnalysis();
+                          _analysisCancellation?.cancel();
+                          _analysisCancellation = null;
+                          _analysisRequestVersion++;
+                          _recommendationRequestVersion++;
+                          _recommendationNeedsAnalysis = false;
+                          _analyzing = false;
+                          _analysisError = null;
+                          _recommendation = null;
+                          _recommendError = null;
                           _selectedMood = _moods
                               .where((mood) => mood.id == id)
                               .firstOrNull;
+                          // Preserve the origin receipt while recording an explicit manual decision.
+                          if (_selectedMood != null && _analysis != null) {
+                            _analysis = _analysis!.withMood(_selectedMood!);
+                          }
                         }),
                 ),
                 const SizedBox(height: 20),
@@ -330,7 +405,8 @@ class _MoodDiscoveryScreenState extends State<MoodDiscoveryScreen> {
                       ? null
                       : (values) => setState(() {
                           _recommendationType = values.first;
-                          if (_analysis != null || _analyzing) {
+                          if (_analysis?.analysisId != null &&
+                              _submittedAnalysisId == _analysis?.analysisId) {
                             _invalidateAnalysis();
                             _analysisError = 'Đã đổi loại nội dung. Hãy phân tích lại hoặc chọn tâm trạng thủ công.';
                           }
@@ -363,7 +439,9 @@ class _MoodDiscoveryScreenState extends State<MoodDiscoveryScreen> {
                 const SizedBox(height: 12),
                 StatusCard(
                   message: _recommendError!,
-                  onRetry: _requestRecommendations,
+                  onRetry: _recommendationNeedsAnalysis
+                      ? _analyzeDescription
+                      : _requestRecommendations,
                 ),
               ],
               if (_requestingRecommendations)
@@ -422,89 +500,110 @@ class _AnalysisCard extends StatelessWidget {
   const _AnalysisCard({required this.result});
   final MoodAnalysisResult result;
 
+  (String, String) get _copy {
+    if (result.status == MoodAnalysisStatus.matched) {
+      return (
+        moodName(result.label),
+        result.source == MoodAnalysisSource.manual
+            ? 'Tiếp tục để nhận gợi ý phim và nhạc.'
+            : 'Bạn có thể chọn lại nếu cảm xúc này chưa phù hợp.',
+      );
+    }
+    if (result.status == MoodAnalysisStatus.unsupportedLanguage) {
+      return (
+        'Hãy dùng tiếng Việt hoặc Anh',
+        'Bạn cũng có thể chọn tâm trạng bên dưới để tiếp tục.',
+      );
+    }
+    if (result.status == MoodAnalysisStatus.unavailable) {
+      return (
+        'Chưa thể phân tích lúc này',
+        'Bạn có thể thử lại sau hoặc tự chọn tâm trạng bên dưới.',
+      );
+    }
+    return switch (result.reasonCode) {
+      'low_confidence' => (
+        'Bạn có thể tự chọn cảm xúc',
+        'AI chưa đủ chắc chắn. Chọn tâm trạng bên dưới để tiếp tục.',
+      ),
+      'mixed_emotions' => (
+        'Bạn đang có nhiều cảm xúc',
+        'Chọn cảm xúc rõ nhất lúc này để nhận gợi ý phù hợp.',
+      ),
+      'unsupported_emotion' || 'mood_not_available' => (
+        'Chưa có gợi ý phù hợp',
+        'Bạn có thể chọn cảm xúc gần nhất với mình ở bên dưới.',
+      ),
+      _ => (
+        'Chưa rõ cảm xúc của bạn',
+        'Thử mô tả rõ hơn một chút hoặc chọn tâm trạng bên dưới.',
+      ),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
-    const emotionNames = {
-      'Anger': 'Giận dữ',
-      'Disgust': 'Ghê tởm',
-      'Enjoyment': 'Vui vẻ',
-      'Fear': 'Sợ hãi',
-      'Other': 'Khác / trung tính',
-      'Sadness': 'Buồn',
-      'Surprise': 'Bất ngờ',
-    };
-    final candidateLabels = result.candidates
-        .take(3)
-        .map((candidate) => emotionNames[candidate.label] ?? candidate.label)
-        .join(', ');
+    final (title, message) = _copy;
+    final matched = result.status == MoodAnalysisStatus.matched;
+    final manual = result.source == MoodAnalysisSource.manual;
     final icon = switch (result.status) {
-      MoodAnalysisStatus.matched => Icons.lightbulb_outline,
-      MoodAnalysisStatus.ambiguous => Icons.help_outline,
-      MoodAnalysisStatus.unknown => Icons.search_off,
+      MoodAnalysisStatus.matched =>
+        manual ? Icons.check_rounded : Icons.auto_awesome_rounded,
       MoodAnalysisStatus.unavailable => Icons.cloud_off_outlined,
-      MoodAnalysisStatus.unsupportedLanguage => Icons.translate,
+      MoodAnalysisStatus.unsupportedLanguage => Icons.translate_rounded,
+      _ => Icons.chat_bubble_outline_rounded,
     };
-    return Card(
-      color: AppColors.surfaceSecondary,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: AppColors.accentPrimary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    result.status == MoodAnalysisStatus.matched
-                        ? 'Tâm trạng gợi ý: ${moodName(result.label)}'
-                        : result.label,
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: Card(
+        key: const ValueKey('mood-analysis-result'),
+        color: AppColors.surfaceSecondary,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.accentPrimary.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(result.reason),
-            Theme(
-              data: Theme.of(context)
-                  .copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                key: const PageStorageKey('discovery-analysis-details'),
-                title: const Text(
-                  'Thông tin phân tích',
-                  style: TextStyle(fontSize: 12),
-                ),
-                tilePadding: EdgeInsets.zero,
-                expandedCrossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (result.confidence != null)
+                child: Icon(icon, color: AppColors.accentPrimary, size: 21),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (matched) ...[
+                      Text(
+                        manual ? 'Bạn đã chọn' : 'Tâm trạng gợi ý',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 3),
+                    ],
                     Text(
-                      'Điểm tin cậy phân loại: ${(result.confidence! * 100).toStringAsFixed(1)}%',
+                      title,
+                      style: matched
+                          ? Theme.of(context).textTheme.titleLarge
+                          : Theme.of(context).textTheme.titleSmall,
                     ),
-                  if (candidateLabels.isNotEmpty)
-                    Text('Các sắc thái nhận diện: $candidateLabels'),
-                  if (result.confidence != null)
-                    const Text(
-                      'Điểm tin cậy không phải tỷ lệ dự đoán đúng.',
-                      style: TextStyle(
+                    const SizedBox(height: 6),
+                    Text(
+                      message,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.textSecondary,
-                        fontSize: 12,
+                        height: 1.5,
                       ),
                     ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Phiên bản: ${result.analyzerVersion}',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

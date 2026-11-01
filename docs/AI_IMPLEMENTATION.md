@@ -1,5 +1,7 @@
 # Moodify AI integration — implementation and acceptance status
 
+> Cập nhật hiện hành 27/10/2026: xem [AI_SYSTEM_UNIFICATION_RESULTS.md](AI_SYSTEM_UNIFICATION_RESULTS.md). Nội dung bên dưới là snapshot triển khai trước đó; Inference lab/overview và hợp đồng song ngữ đã được cập nhật.
+
 
 > **Cập nhật tích hợp Mobile 25/10/2026:** Khám phá hiện gọi API `/api/MoodAnalysis/valence-arousal`, định tuyến tiếng Việt → PhoBERT, tiếng Anh → RoBERTa VA; tự nhận diện nhẹ, hiển thị model dưới ô nhập và không có bộ chọn ngôn ngữ. Kết quả gợi ý giữ V/A và phiên bản model (`source=ai_va`). Các mô tả English-only/GoEmotions ở những lượt kiểm tra cũ bên dưới là lịch sử triển khai. Chi tiết và giới hạn xác minh mới: [AI_MODEL_TEST_CASES.md](AI_MODEL_TEST_CASES.md).
 

@@ -53,7 +53,7 @@ Backend tự tạo collection/index/validator khi database trống, **không t�
 
 ### Khôi phục bản `database_backup` bằng mongorestore
 
-Bản backup được cấp riêng có cấu trúc `database_backup/mood_recommendation/*.bson` và `*.metadata.json`. Cài **MongoDB Community Server** và **MongoDB Database Tools**, bật MongoDB tại `127.0.0.1:27017`; khôi phục trước khi chạy backend. Database đích `mood_recommendation` phải chưa có dữ liệu. Từ root project, sau khi giải nén đúng thư mục:
+Bản backup nhận kèm project hoặc được cấp riêng có cấu trúc `database_backup/mood_recommendation/*.bson` và `*.metadata.json`. Cài **MongoDB Community Server** và **MongoDB Database Tools**, bật MongoDB tại `127.0.0.1:27017`; khôi phục trước khi chạy backend. Database đích `mood_recommendation` phải chưa có dữ liệu. Từ root project, sau khi giải nén đúng thư mục:
 
 ```powershell
 mongorestore --uri="mongodb://127.0.0.1:27017" --nsInclude="mood_recommendation.*" --stopOnError ".\database_backup"
@@ -167,11 +167,19 @@ flutter run -d <device-id> --dart-define=API_BASE_URL=http://192.168.1.100:5170
 Khôi phục artifact được cấp riêng tại `code-train/train-KLCN/output/roberta_large_asl_en_01/`, gồm `best_model`, `deployment`, `run_config.json`. Không chỉ chép model.safetensors. Model VA EmoBank dùng riêng file `code-train/train-KLCN/output/roberta_va_regression/roberta_va_regression.pt` và thư mục `tokenizer`; runner nhận diện model này và cung cấp endpoint riêng. Xem [artifact](code-train/README.md) và [Python environment](ai-service/README.md).
 
 1. Cài `ai-service/.venv`, đặt artifact cần dùng đúng thư mục, chạy `./Start.ps1` không có WithoutAI. VA có thể chạy riêng khi chưa có artifact phân loại cũ.
-2. Đợi runner báo model tương ứng đã sẵn sàng trên cổng 8001. Website người dùng → Home → AI Mood Analysis → chọn English hoặc Tiếng Việt → nhập mô tả → phân tích → xem mood → nhận gợi ý. Trên Mobile: Khám phá → nhập mô tả (mặc định tự nhận diện Việt/Anh) → Phân tích tâm trạng → Xác nhận và nhận gợi ý. Kết quả Mobile hiển thị model và phiên bản đã xử lý; không còn gọi classifier 28 nhãn cũ. Registry classifier 28 nhãn vẫn là luồng riêng.
+2. Đợi runner báo model tương ứng đã sẵn sàng trên cổng 8001. Website người dùng → Home → AI Mood Analysis → nhập mô tả Việt/Anh (backend tự nhận diện) → phân tích → xem mood → nhận gợi ý. Trên Mobile: Khám phá → nhập mô tả (mặc định tự nhận diện Việt/Anh) → Phân tích tâm trạng → Xác nhận và nhận gợi ý. Kết quả Mobile hiển thị model và phiên bản đã xử lý; không còn gọi classifier 28 nhãn cũ. Registry classifier 28 nhãn vẫn là luồng riêng.
 3. Nếu dùng classifier cũ, đăng nhập Admin/AIEngineer → Models → Validate → Activate. Runtime ready và registry active là hai điều kiện riêng; runner không tự Activate. Emotion mapping chỉ áp dụng cho classifier 28 nhãn.
 4. Datasets → Training jobs: tải bundle/notebook, chạy Colab bên ngoài rồi nhập báo cáo. Tạo job không tự triển khai model mới.
 
 Nếu chạy từng terminal chỉ với VA, tạo `ai-service/.venv`, cài `ai-service/requirements.txt`, rồi trong thư mục `ai-service` đặt `VA_MODEL_ENABLED=true`, `VA_MODEL_DIR` trỏ tới `../code-train/train-KLCN/output/roberta_va_regression`, `VA_CHECKPOINT` trỏ tới file `.pt`, `VA_TOKENIZER_DIR` trỏ tới thư mục `tokenizer`, và chạy `python -m uvicorn main:app --host 127.0.0.1 --port 8001 --workers 1`. Backend cần `AI__Enabled=true` và `AI__ServiceUrl=http://127.0.0.1:8001/`. Nếu dùng runner `Start.ps1`, các biến này được đặt tự động. Khi AI không sẵn sàng, các luồng chọn mood thủ công vẫn hoạt động.
+
+### Hợp đồng AI song ngữ hiện tại — 27/10/2026
+
+Mobile và Web gửi `language=auto` tới `POST /api/MoodAnalysis/valence-arousal`. Backend chọn PhoBERT hoặc RoBERTa VA; response ghi `language`, `modelType`, `modelVersion`, `mappingVersion` và trạng thái. Kết quả đủ điều kiện có `analysisId` gắn tài khoản, hiệu lực 5 phút. Khi xác nhận, client gửi mã này với mood và bộ lọc; V/A và phiên bản model được lấy từ kết quả đã lưu ở server. Đổi model/vùng mood hoặc mã hết hạn thì cần phân tích lại. Kết quả dưới ngưỡng không tạo mã xác nhận AI; vẫn chọn mood thủ công được.
+
+AI overview và Inference lab của kỹ sư đã phản ánh hai pipeline này. **GoEmotions mapping** chỉ tác động classifier 28 nhãn cũ. Datasets/Training jobs hiện vẫn dành cho pipeline 28 nhãn; chưa phải trình huấn luyện PhoBERT hoặc VA regression.
+
+Xem [kết quả thực hiện và bằng chứng](docs/AI_SYSTEM_UNIFICATION_RESULTS.md), [checklist còn lại](docs/AI_SYSTEM_UNIFICATION_PLAN.md). Cả backend và Mobile cần được cập nhật cùng phiên bản hợp đồng này; client cũ gửi V/A với `source=ai_va` sẽ nhận HTTP 400 yêu cầu dùng `analysisId`.
 
 ## Cách sử dụng
 
@@ -207,29 +215,27 @@ MongoDB phải chạy; các test AI cần artifact/config riêng. Backend tests 
 ## Lỗi thường gặp và giới hạn
 
 - Cổng 5170/5174 bị chiếm: kiểm tra Status và Stop runner trước khi dotnet run.
+- Sau khi Windows khởi động lại, runner bỏ bản ghi tiến trình đã hết hạn và kiểm tra lệnh/thời điểm tạo tiến trình để nhận diện PID được dùng lại. Có thể chạy Start lại bình thường; kiểm thử runner riêng: `powershell -NoProfile -File tests/LocalRunner.Tests.ps1`.
 - Runtime unavailable: kiểm tra Python, weights/hash, AI.Enabled, ServiceUrl; registry active không đồng nghĩa runtime đang chạy.
 - Unknown/unmapped: nhãn chưa vượt ngưỡng hoặc chưa có mood; chọn tay.
 - Danh mục trống: import bản backup riêng hoặc thêm nội dung bằng Admin.
 - Emulator không kết nối: kiểm tra backend và API 10.0.2.2:5170.
 
-Chưa hoàn tất đánh giá NLP/recommender độc lập, đo thời lượng nghe/xem thực, RL và chứng minh rollback sang artifact thứ hai. Kiểm tra quyền phân phối trước khi công bố dataset/artifact bên thứ ba; repo không tự cấp giấy phép cho chúng.
+Chưa hoàn tất đánh giá chất lượng NLP/recommender độc lập hoặc đo thời lượng nghe/xem thực. Rollback giữa hai artifact khác weights đã kiểm chứng trên môi trường tạm. RL/bandit không bắt buộc trong phạm vi hiện tại, pilot tiếp tục tắt. Kiểm tra quyền phân phối trước khi công bố dataset/artifact bên thứ ba; repo không tự cấp giấy phép cho chúng.
 
 ## Tài liệu
 
-- [Báo cáo tuần 7–8](docs/BAO_CAO_TUAN_7_8.md).
-- [Đối chiếu task và phân quyền](docs/WEEK_7_8_ROLE_REVIEW.md).
-- [Emotion mapping](docs/EMOTION_MAPPING_RESEARCH.md).
+- [Báo cáo tuần 09](docs/BAO_CAO_TUAN_09.md).
 - [AI Engineer](docs/AI_ENGINEER_IMPLEMENTATION.md).
-- [Recommender](docs/RECOMMENDATION_FEATURES_2026-10-07.md).
-- [File giữ lại và chuyển riêng](docs/REPOSITORY_CLEANUP.md).
+- [Recommender, Hybrid và kiểm chứng AI](docs/AI_SYSTEM_UNIFICATION_RESULTS.md).
 
 README là điểm bắt đầu hiện tại; tài liệu theo ngày có thể phản ánh trạng thái cũ.
 
 ### Phân tích AI song ngữ trên Mobile
 
-Mobile gọi `POST /api/MoodAnalysis/valence-arousal`: `language=vi` dùng PhoBERT đang active; `language=en` dùng RoBERTa VA đang active. Khi nhận gợi ý, app gửi nguyên điểm valence/arousal và `modelVersion` với `source=ai_va`; backend lưu phiên bản đó trong lịch sử. Kết quả PhoBERT dưới ngưỡng tin cậy không tự chọn mood; người dùng có thể nhập rõ hơn hoặc chọn thủ công.
+Mobile/Web gọi `POST /api/MoodAnalysis/valence-arousal` với `language=auto`: backend chọn PhoBERT VI hoặc RoBERTa VA EN đang active. Khi xác nhận gợi ý, app gửi `analysisId` gắn tài khoản/hạn dùng với `source=ai_va`; backend lấy V/A và model/policy từ receipt đã lưu. Client không gửi V/A/modelVersion để giả kết quả. PhoBERT dưới ngưỡng không tự chọn mood; người dùng có thể nhập rõ hơn hoặc chọn thủ công.
 
-Nhận diện ngôn ngữ là quy tắc nhẹ chạy trên máy, không tải thêm model lên điện thoại. Mobile chỉ dùng tự nhận diện và hiện model dưới ô nhập. Với câu không dấu, quá ngắn hoặc pha ngôn ngữ, nhận diện có thể chưa chính xác; nên diễn đạt rõ bằng một ngôn ngữ. Xem [20 ca thử và cách xác định model](docs/AI_MODEL_TEST_CASES.md). Trọng số model vẫn chạy ở Python service, không đóng gói trong APK.
+Định tuyến chính là quy tắc có phiên bản ở backend; dòng gợi ý trước khi phân tích trên Mobile chỉ là dự kiến. Không tải weights lên điện thoại. Mobile chỉ dùng tự nhận diện và hiện model dưới ô nhập. Với câu không dấu, quá ngắn hoặc pha ngôn ngữ, nhận diện có thể chưa chính xác; nên diễn đạt rõ bằng một ngôn ngữ. Xem [20 ca thử và cách xác định model](docs/AI_MODEL_TEST_CASES.md). Trọng số model vẫn chạy ở Python service, không đóng gói trong APK.
 
 
 ### Các phần Mobile bổ sung ngày 25/10/2026
@@ -258,3 +264,25 @@ Cấp riêng `mobile-app/android/app/google-services.json` và `backend/firebase
 Script giữ các section TMDB/Spotify/AI và sao lưu cấu hình cũ trước khi ghi. Credential nằm trong file local đã gitignore; không đưa service account hoặc app password lên Git. Khởi động lại backend, Stop rồi Run app hoàn toàn trong Android Studio để nhận native plugin mới.
 
 Xem [hướng dẫn cấu hình, cách thử và giới hạn](docs/AUTH_NOTIFICATIONS_SETUP.md). Android tự đọc `google-services.json`; Web Google cần cấu hình Firebase Web riêng, chưa có Web/iOS push. Kiểm thử hiện tại: 67 Flutter tests, 612 API/nghiệp vụ assertions; xác thực SMTP/Firebase thật thành công nhưng chưa xác minh email/push tới thiết bị hoặc chọn Google account thật. APK debug đã build thành công.
+
+
+### AI Engineer và Recommender — cập nhật 27/10/2026
+
+- **AI overview/Inference lab:** hai pipeline thật, policy và metrics theo phiên bản; GoEmotions vẫn riêng.
+- **GoEmotions mapping:** phần Bilingual VA policies quản lý các mood ID được dùng và gate VI bổ sung, không sửa neo để ép kết quả.
+- **Datasets / Training jobs / Evaluation:** schema riêng VSMEC7, VA regression, explicit-rating MF; job tải bundle, chạy runner offline/local/Colab rồi nhập report. Chuẩn bị job không tự train hoặc Activate.
+- **VI/EN Models:** upload chỉ lưu candidate; quality policy → evaluation-only → review approval → activate. Lifecycle có revision/fingerprint, rollback và kiểm tra identity sau restart; readiness không là quality.
+- **Feedback analytics:** MF registry, baseline fallback và contextual bandit thử nghiệm mặc định tắt. Đây không phải RL nhiều bước.
+
+MF/pilot chưa được bật trên database chính. Chưa có gold NLP mới đã review hoặc bằng chứng MF vượt baseline trên dữ liệu ứng dụng hiện có. Hai CSV preprocessing mới tạo được JSON ứng viên; chưa khôi phục từ điển gốc của lần train target80.
+
+Xem [kết quả/checklist](docs/AI_SYSTEM_UNIFICATION_RESULTS.md), [cách vận hành AI Engineer](docs/AI_ENGINEER_IMPLEMENTATION.md), [audit preprocessing](docs/PHOBERT_PREPROCESSING_AUDIT.md) và [quy trình đánh giá](docs/AI_EVALUATION_PROTOCOL.md).
+
+Android emulator đã pass E2E với cả PhoBERT VI/RoBERTa VA EN thật trên DB tạm, gồm nhận gợi ý/chi tiết/đánh giá/lịch sử. Các giới hạn hiệu năng debug và số đo được ghi trong báo cáo kết quả; chưa kết luận chất lượng NLP hoặc độ mượt trên điện thoại thật.
+
+Để bắt đầu phần nhãn còn thiếu: mở `tools/ai-label-review.html`, nhập `docs/ai-evaluation/review-starter.json`, làm theo [hướng dẫn gán nhãn offline](docs/HUONG_DAN_GAN_NHAN_AI.md). Mẫu 48 câu chưa có gold; nhãn hoàn tất lưu riêng vào `docs/ai-evaluation/completed/` đã gitignore.
+
+
+### Thông báo hệ thống Android — 28/10/2026
+
+Foreground FCM hiện được hiển thị trong ngăn thông báo điện thoại, có channel ưu tiên cao và bấm mở đúng màn hình. Cần build/cài APK mới; hot reload không cập nhật Kotlin/Manifest. Lịch nhắc và lựa chọn nhận thông báo giữ nguyên. Xem [hướng dẫn và phạm vi kiểm thử](docs/ANDROID_SYSTEM_NOTIFICATIONS.md).

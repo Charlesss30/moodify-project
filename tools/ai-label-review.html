@@ -1,0 +1,87 @@
+<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Moodify · Rà soát nhãn AI</title>
+<style>
+:root{color-scheme:dark;font:16px/1.6 system-ui,sans-serif;background:#0d1017;color:#eeeaf8}
+*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0}main{max-width:940px;margin:36px auto;padding:0 22px}
+h1{font-size:29px;margin:4px 0}h2{font-size:20px}p{color:#b6b1c5}
+.card{background:#191c27;border:1px solid #303447;border-radius:20px;padding:24px;margin:18px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+label{display:block;color:#c8c1dc}input,select,textarea,button{font:inherit;border-radius:10px;border:1px solid #4a445c;padding:10px 12px;color:inherit;background:#242432}
+input:not([type=checkbox]),select,textarea{width:100%}button{cursor:pointer}button.primary{background:#bca2ff;color:#211638;border:0}
+button:disabled{opacity:.4;cursor:default}blockquote{margin:18px 0;font-size:22px;border-left:3px solid #bca2ff;padding-left:18px;white-space:pre-wrap}
+small{display:block;color:#aaa3b9}.status{color:#80dbba;min-height:24px}.error{color:#ffb9b9}.muted{color:#a9a1b9}
+@media(max-width:650px){.grid{grid-template-columns:1fr}.card{padding:18px}main{margin:18px auto}}
+</style>
+<main><small>MOODIFY / ĐÁNH GIÁ ĐỘC LẬP</small><h1>Đọc câu. Tự chọn nhãn.</h1>
+<p>Công cụ chạy tại máy của bạn, không gửi câu hoặc nhãn lên mạng. Không có dự đoán AI điền sẵn. File khởi động là câu soạn thử, chưa phải bộ gold đạt nghiệm thu.</p>
+<section class="card"><div class="grid"><label>Mã người gán nhãn<input id="annotator" placeholder="Ví dụ: reviewer-a" maxlength="60"></label>
+<label>Mở file JSON<input id="file" type="file" accept=".json,application/json"></label></div>
+<div class="row" style="margin-top:16px"><button id="restore">Khôi phục bản lưu trên máy</button><button id="export" class="primary" disabled>Tải bản đang làm</button></div>
+<small>Dùng file review-starter.json cạnh hướng dẫn. Người thứ hai mở file gốc để gán độc lập; không đọc nhãn của người thứ nhất.</small></section>
+<section id="editor" class="card" hidden><div class="row"><span id="progress"></span><span id="meta" class="muted"></span></div>
+<blockquote id="sentence"></blockquote><div class="grid">
+<label id="emotionLabel">Cảm xúc VSMEC (tiếng Việt)<select id="emotion"><option value="">Chưa chọn / chưa xác định</option>
+<option value="Anger">Anger · Giận dữ</option><option value="Disgust">Disgust · Ghê tởm / phản cảm</option><option value="Enjoyment">Enjoyment · Vui thích</option>
+<option value="Fear">Fear · Sợ / lo sợ</option><option value="Other">Other · Không rõ một trong sáu lớp còn lại</option>
+<option value="Sadness">Sadness · Buồn</option><option value="Surprise">Surprise · Ngạc nhiên</option></select></label>
+<label>Mood ứng dụng (tùy chọn)<select id="moodId"><option value="">Chưa xác định / không phù hợp</option>
+<option value="1">Vui vẻ</option><option value="2">Buồn</option><option value="3">Thư giãn</option><option value="4">Hào hứng</option>
+<option value="5">Tập trung</option><option value="6">Lãng mạn</option><option value="7">Hoài niệm</option></select></label>
+<label>Mức tích cực — Valence<input id="valence" type="number" min="-1" max="1" step=".05" placeholder="-1 đến 1; để trống nếu chưa rõ"><small>−1 rất khó chịu · 0 trung tính · +1 rất dễ chịu.</small></label>
+<label>Mức kích hoạt — Arousal<input id="arousal" type="number" min="-1" max="1" step=".05" placeholder="-1 đến 1; để trống nếu chưa rõ"><small>−1 rất lắng dịu / ít năng lượng · 0 vừa · +1 rất kích động / nhiều năng lượng.</small></label>
+</div><label style="margin-top:18px">Lý do ngắn / điểm chưa chắc<textarea id="notes" rows="2" maxlength="1000"></textarea></label>
+<label style="margin:18px 0"><input id="reviewed" type="checkbox"> Tôi đã đọc câu và xác nhận các nhãn này.</label>
+<small>VI cần emotion; EN cần cả hai tọa độ. Bình yên có thể dễ chịu nhưng ít kích hoạt; giận có thể khó chịu nhưng kích hoạt cao. Không tự đồng nhất Other với Thư giãn. Nếu chưa chắc, để chưa review và ghi lý do.</small>
+<div class="row" style="margin-top:20px"><button id="prev">← Trước</button><button id="next" class="primary">Tiếp →</button></div></section>
+<p id="message" role="status" class="status">Chọn file để bắt đầu.</p>
+<small>Không đổi split validation/test hoặc ID khi đang gán nhãn. Hai câu Việt/Anh cùng tình huống nằm cùng split. Không đưa file nhãn cá nhân lên Git.</small></main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);let rows=[],position=0;
+const fields=['emotion','valence','arousal','moodId','notes','reviewed'];
+function say(text,error=false){$('message').textContent=text;$('message').className=error?'status error':'status'}
+function number(id){const value=$(id).value.trim();return value===''?null:Number(value)}
+function valid(row){return $('annotator').value.trim()&&
+ (row.language==='vi'?['Anger','Disgust','Enjoyment','Fear','Other','Sadness','Surprise'].includes(row.emotion):
+ row.valence!==null&&row.arousal!==null)&&
+ [row.valence,row.arousal].every(n=>n===null||Number.isFinite(n)&&n>=-1&&n<=1)&&
+ ((row.valence===null)===(row.arousal===null))}
+function save(){
+ if(!rows.length)return;
+ const row=rows[position];
+ Object.assign(row,{emotion:row.language==='vi'?$('emotion').value||null:null,valence:number('valence'),arousal:number('arousal'),
+ moodId:number('moodId'),notes:$('notes').value,annotatorId:$('annotator').value.trim()});
+ const checked=$('reviewed').checked;row.reviewed=Boolean(checked&&valid(row));
+ if(checked&&!row.reviewed){$('reviewed').checked=false;say('Chưa đủ nhãn hợp lệ hoặc chưa có mã người gán nhãn. Không đánh dấu đã review.',true)}
+ if(row.reviewed)row.reviewedAt=new Date().toISOString();else delete row.reviewedAt;
+ localStorage.setItem('moodify-label-review-draft',JSON.stringify({rows,position,annotatorId:$('annotator').value}));
+}
+function render(){
+ $('editor').hidden=!rows.length;$('export').disabled=!rows.length;if(!rows.length)return;
+ const row=rows[position];$('sentence').textContent=row.text;
+ $('meta').textContent=`${row.id} · ${row.language.toUpperCase()} · ${row.split}`;
+ $('progress').textContent=`Câu ${position+1}/${rows.length} · Đã xác nhận ${rows.filter(r=>r.reviewed).length}`;
+ for(const field of fields){if(field==='reviewed')$(field).checked=Boolean(row.reviewed);else $(field).value=row[field]??''}
+ $('emotionLabel').hidden=row.language!=='vi';$('prev').disabled=position===0;$('next').disabled=position===rows.length-1;
+}
+function load(value){
+ if(!Array.isArray(value)||!value.length||value.length>10000)throw Error('File phải là mảng JSON từ 1 đến 10.000 câu.');
+ const ids=new Set();
+ for(const row of value){
+ if(!row||typeof row.id!=='string'||ids.has(row.id)||typeof row.text!=='string'||!row.text.trim()||
+ !['vi','en'].includes(row.language)||!['train','validation','test'].includes(row.split))throw Error('ID, text, language hoặc split không hợp lệ.');
+ ids.add(row.id);
+ }
+ rows=value;position=0;render();say('Đã mở file. Đọc từng câu rồi tự gán nhãn.');
+}
+$('file').onchange=async()=>{try{const f=$('file').files[0];if(!f||f.size>8000000)throw Error('Chọn file JSON dưới 8 MB.');load(JSON.parse(await f.text()))}catch(e){say(e.message,true)}};
+$('restore').onclick=()=>{try{const draft=JSON.parse(localStorage.getItem('moodify-label-review-draft')||'null');if(!draft)throw Error('Chưa có bản lưu.');
+load(draft.rows);position=Math.max(0,Math.min(draft.position,rows.length-1));$('annotator').value=draft.annotatorId||'';render();say('Đã khôi phục bản làm dở trên máy.')}catch(e){say(e.message,true)}};
+for(const name of fields)$(name).onchange=()=>{if(name!=='reviewed')$('reviewed').checked=false;save();render()};
+$('annotator').onchange=()=>{if(rows.length){$('reviewed').checked=false;save();render()}};
+$('prev').onclick=()=>{save();position--;render()};$('next').onclick=()=>{save();position++;render()};
+$('export').onclick=()=>{save();const id=$('annotator').value.trim();if(!id){say('Nhập mã người gán nhãn trước khi tải.',true);return}
+const link=document.createElement('a');const url=URL.createObjectURL(new Blob([JSON.stringify(rows,null,2)],{type:'application/json;charset=utf-8'}));
+link.href=url;link.download='labels-'+id.replace(/[^a-zA-Z0-9_-]/g,'_')+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+say(`Đã xuất ${rows.length} câu, ${rows.filter(r=>r.reviewed).length} câu được xác nhận. Các câu chưa review vẫn được giữ để làm tiếp.`)};
+</script></html>

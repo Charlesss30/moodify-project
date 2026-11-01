@@ -15,7 +15,10 @@ using mood_recommendation.Data;
 namespace mood_recommendation.Controllers;
 
 [ApiController, Route("api/AiWorkspace"), Authorize(Roles = "AIEngineer")]
-public class AiWorkspaceController(MongoStore db, IWebHostEnvironment env) : ControllerBase
+public class AiWorkspaceController(MongoStore db, IWebHostEnvironment env, IConfiguration config,
+    mood_recommendation.Services.ValenceArousalAnalysisService vaAnalysis,
+    mood_recommendation.Services.VietnameseEmotionService viAnalysis,
+    mood_recommendation.Services.BilingualPolicyService policyService) : ControllerBase
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private IMongoCollection<AiDataset> Datasets => db.Database.GetCollection<AiDataset>("aiDatasets");
@@ -28,6 +31,37 @@ public class AiWorkspaceController(MongoStore db, IWebHostEnvironment env) : Con
     private static object Summary(AiDataset d) => new { d.Id, d.Name, d.Source, d.Hash, d.CreatedAt, d.ActorId,
         count = d.Rows.Count, splits = d.Rows.GroupBy(x => x.Split).ToDictionary(x => x.Key, x => x.Count()),
         labels = d.Rows.SelectMany(x => x.Labels).Distinct().Order().ToArray() };
+
+    [HttpGet("pipelines")]
+    public async Task<IActionResult> Pipelines(CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var viTask = viAnalysis.RuntimeStatusAsync(ct);
+        var enTask = vaAnalysis.RuntimeStatusAsync(ct);
+        await Task.WhenAll(viTask, enTask);
+        var moods = await db.TamTrangs.ToListAsync(ct);
+        var viPolicy=await policyService.ActiveAsync("vi",ct);var enPolicy=await policyService.ActiveAsync("en",ct);
+        return Ok(new {
+            enabled = config.GetValue<bool>("AI:Enabled"),
+            routingVersion = mood_recommendation.Services.MoodLanguageRouter.Version,
+            mappingEngineVersion = mood_recommendation.Services.SemanticMoodMapper.Version,
+            mappingScope = "Clear current-self clauses can be selected before one model inference when requests, past events or other people's states dilute the description. Full-text context guards still apply; raw model VA remains separate from the mood-constrained recommendation target.",
+            moodSetHash = mood_recommendation.Services.BilingualMoodAnalysisService.MoodSetHash(moods),
+            policies = new[] {
+                new { language = "vi", modelType = "emotion_classification_va_adapter",
+                    mappingVersion = viPolicy.Version,
+                    limitation = "Probability-weighted VSMEC anchors cannot represent positive, low-arousal VA (A >= 0.75 V)." },
+                new { language = "en", modelType = "valence_arousal_regression",
+                    mappingVersion = enPolicy.Version,
+                    limitation = "Continuous regression coordinates have no classification confidence." }
+            },
+            vietnamese = await viTask, english = await enTask,
+            legacyMappingScope = "28-label GoEmotions classifier only; not the bilingual mobile VA mapping.",
+            trainingScope = "Legacy jobs use 28-label ASL; typed dataset/job controls separately support VSMEC7, VA regression and matrix factorization.",
+            moods = moods.OrderBy(m => m.TamTrangID).Select(m => new { id=m.TamTrangID, name=m.TenTamTrang,
+                m.MinValence,m.MaxValence,m.MinArousal,m.MaxArousal })
+        });
+    }
 
     [HttpGet("datasets")]
     public async Task<IActionResult> ListDatasets(CancellationToken ct) => Ok(new {

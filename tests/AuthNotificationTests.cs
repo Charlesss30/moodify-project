@@ -35,7 +35,9 @@ public static class AuthNotificationTests {
         string? code=null;
         for(var tries=0;tries<80 && code is null;tries++) {
             if(Directory.Exists(folder))foreach(var path in Directory.GetFiles(folder,"*.eml")) {
-                var email=await MimeMessage.LoadAsync(path);
+                MimeMessage email;
+                try { email=await MimeMessage.LoadAsync(path); }
+                catch(IOException) { continue; } // Wait for the background writer to close the file.
                 if(email.To.Mailboxes.Any(x=>x.Address==account.Email))
                     code=Regex.Match(email.TextBody??"",@"\b[0-9]{6}\b").Value;
             }

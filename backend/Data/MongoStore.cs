@@ -38,6 +38,24 @@ public sealed class MongoStore
         foreach(var entry in schemas)
             if(!names.Contains(entry.Name))
                 await Database.CreateCollectionAsync(entry.Name,new CreateCollectionOptions<BsonDocument>{ Validator=entry.Value.AsBsonDocument });
+        // Backward-compatible optional provenance for five-minute analysis receipts.
+        // Extend only this property in the existing validator; preserve all other validation rules/options.
+        using(var cursor=await Database.ListCollectionsAsync(new ListCollectionsOptions {
+            Filter=new BsonDocument("name","aiVaAnalyses") })) {
+            var info=await cursor.FirstOrDefaultAsync();
+            if(info?.GetValue("options",new BsonDocument()).AsBsonDocument
+                .GetValue("validator",new BsonDocument()) is BsonDocument existing
+                &&existing.GetValue("$jsonSchema",BsonNull.Value) is BsonDocument jsonSchema
+                &&jsonSchema.GetValue("properties",BsonNull.Value) is BsonDocument properties
+                &&!properties.Contains("inputScope")) {
+                var updated=existing.DeepClone().AsBsonDocument;
+                updated["$jsonSchema"]["properties"]["inputScope"]=
+                    schemas["aiVaAnalyses"]["$jsonSchema"]["properties"]["inputScope"].DeepClone();
+                await Database.RunCommandAsync<BsonDocument>(new BsonDocument {
+                    {"collMod","aiVaAnalyses"},{"validator",updated}
+                });
+            }
+        }
         foreach(var name in new[]{"accounts","moods","ratings","moodHistory"})
         {
             var latest = await Database.GetCollection<BsonDocument>(name).Find(FilterDefinition<BsonDocument>.Empty).Sort(new BsonDocument("_id",-1)).FirstOrDefaultAsync();
@@ -47,6 +65,12 @@ public sealed class MongoStore
         foreach(var (name,field) in new[]{("accounts","emailNormalized"),("accounts","usernameNormalized"),("genres","nameNormalized"),("moods","nameNormalized")})
             await Database.GetCollection<BsonDocument>(name).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
                 new BsonDocument(field,1),new CreateIndexOptions{Unique=true}));
+        await Database.GetCollection<mood_recommendation.Services.NlpQualityApproval>("aiNlpQualityApprovals").Indexes.CreateOneAsync(
+            new CreateIndexModel<mood_recommendation.Services.NlpQualityApproval>(
+                Builders<mood_recommendation.Services.NlpQualityApproval>.IndexKeys.Ascending(x=>x.Kind).Ascending(x=>x.Version).Ascending(x=>x.BundleSha256)));
+        await Database.GetCollection<mood_recommendation.Services.NlpQualityPolicy>("aiNlpQualityPolicies").Indexes.CreateOneAsync(
+            new CreateIndexModel<mood_recommendation.Services.NlpQualityPolicy>(
+                Builders<mood_recommendation.Services.NlpQualityPolicy>.IndexKeys.Ascending(x=>x.Kind).Descending(x=>x.CreatedAt)));
         await Collection<Nhac>().Indexes.CreateOneAsync(new CreateIndexModel<Nhac>(
             new BsonDocument{{"source",1},{"externalId",1}},new CreateIndexOptions<Nhac>{Unique=true,PartialFilterExpression=new BsonDocument("externalId",new BsonDocument("$type","string"))}));
         await Collection<TaiKhoan>().Indexes.CreateOneAsync(new CreateIndexModel<TaiKhoan>(
@@ -68,6 +92,9 @@ public sealed class MongoStore
         foreach (var name in new[] { "interactions", "ratings" })
             await Database.GetCollection<BsonDocument>(name).Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument { ["accountId"] = 1, ["createdAt"] = -1, ["_id"] = -1 }));
         await Collection<LichSuTamTrang>().Indexes.CreateOneAsync(new CreateIndexModel<LichSuTamTrang>(new BsonDocument { ["accountId"] = 1, ["recommendationId"] = 1 }));
+        await Database.GetCollection<BsonDocument>(Services.BilingualMoodAnalysisService.ReceiptCollection).Indexes.CreateOneAsync(
+            new CreateIndexModel<BsonDocument>(new BsonDocument("expiresAt", 1),
+                new CreateIndexOptions { ExpireAfter = TimeSpan.Zero, Name = "expire_ai_va_analysis" }));
         // Finish interrupted deletes / remove incomplete inserts after a process restart.
         foreach(var item in await Collection<NoiDungGiaiTri>().Find(x=>x.Deleted).ToListAsync()) await DeleteContent(item.NoiDungID);
     }

@@ -144,3 +144,30 @@ flutter test --no-pub tool/generate_brand_icons.dart
 Cách tách background/foreground và lớp monochrome theo [Android adaptive icons](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive). Analyzer sạch; 20 kiểm tra hồi quy startup, Trang chủ, đăng nhập/Google, thông báo và gửi đánh giá đã pass. Đã xem ảnh icon xuất ra. Cần Stop/Run hoặc cài APK mới để launcher và splash native cập nhật; hot reload chỉ cập nhật phần Flutter.
 
 APK debug với bộ icon đồng bộ đã build thành công. Hiện không có emulator/thiết bị kết nối để cài và xem launcher thật trong lượt này.
+
+
+## Rút gọn kết quả tâm trạng cho người dùng — 30/10/2026
+
+Thẻ kết quả Khám phá chỉ giữ thông tin giúp người dùng tiếp tục:
+
+- Caption “Tâm trạng gợi ý” và tên tâm trạng nổi bật.
+- Một câu ngắn: “Bạn có thể chọn lại nếu cảm xúc này chưa phù hợp.”
+- Khi người dùng tự chọn: “Bạn đã chọn” và hướng dẫn tiếp tục nhận gợi ý.
+- Các trạng thái chưa rõ/nhiều cảm xúc/chưa có mood/lỗi dịch vụ dùng lời nhắn dễ hiểu, hướng tới mô tả lại hoặc chọn thủ công.
+
+Bỏ phần mở rộng “Thông tin phân tích”, phần trăm confidence, các nhãn emotion ứng viên, phiên bản model và giải thích phủ định/phương pháp trong thẻ. Dữ liệu AI vẫn giữ trong hợp đồng client/backend và công cụ quản trị. Dòng model nhỏ dưới ô nhập giữ theo yêu cầu nhận diện Việt/Anh trước đó.
+
+Không thay model, threshold, receipt, ranking hoặc hành vi xác nhận/manual. Chỉ cập nhật trình bày và lời nhắn; Android integration test được cập nhật selector caption mới.
+
+87 Flutter tests pass, analyzer sạch. Có kiểm tra màn 320 px với text scale 1,4, không lộ thông báo kỹ thuật, và luồng chọn lại/receipt/cancel kết quả cũ vẫn pass. Preview cục bộ dùng theme ứng dụng với font hệ thống thay Inter; không là bằng chứng đã chạy UI trên thiết bị Android thật.
+
+
+## Khám phá ở giữa thanh điều hướng — 30/10/2026
+
+Thứ tự hiển thị: Trang chủ → Thư viện → Khám phá → Lịch sử → Cá nhân.
+
+Khám phá dùng icon la bàn cỡ 30 trong nền tím bo góc 54 × 44; trạng thái được chọn có nền tím sáng và icon tương phản. Các tab còn lại giữ icon nhỏ gọn. Chuyển màu ngắn 180 ms và tôn trọng cài đặt giảm chuyển động, không có animation chạy nền.
+
+Chỉ ánh xạ lại vị trí hiển thị, giữ identity trang và trạng thái đã tải. Đường vào Khám phá từ Trang chủ và mở nội dung đã lưu từ Cá nhân vẫn đúng. Không đổi API hoặc luồng AI.
+
+88 Flutter tests pass; analyzer sạch. Đã render và xem thanh nav cục bộ với theme ứng dụng/font hệ thống. Cần Hot Restart để nạp thay đổi.

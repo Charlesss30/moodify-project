@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/api_service.dart';
 import '../auth/firebase_bootstrap.dart';
+import 'system_notifications.dart';
 
 @pragma('vm:entry-point')
 Future<void> moodifyBackgroundMessage(RemoteMessage message) async {
@@ -97,21 +98,15 @@ class PushNotifications {
   static String? _fid;
   static StreamSubscription<RemoteMessage>? _foreground, _opened;
   static void Function(String screen)? onOpen;
-  static void Function(String title, String body, String screen)? onForeground;
   static String? pendingScreen;
 
   static Future<void> initialize() async {
     if (!client.available) return;
     FirebaseMessaging.onBackgroundMessage(moodifyBackgroundMessage);
     await FirebaseMessaging.instance.setAutoInitEnabled(false);
+    await SystemNotifications.initialize(onOpen: _open);
     _foreground ??= FirebaseMessaging.onMessage.listen((message) {
-      if (!active || !ApiService.isAuthenticated) return;
-      final screen = _screen(message);
-      onForeground?.call(
-        message.notification?.title ?? 'Moodify',
-        message.notification?.body ?? 'Có một lời nhắc dành cho bạn.',
-        screen,
-      );
+      unawaited(handleForeground(message));
     });
     _opened ??= FirebaseMessaging.onMessageOpenedApp.listen(
       (message) => _open(_screen(message)),
@@ -120,11 +115,30 @@ class PushNotifications {
     if (initial != null) _open(_screen(initial));
   }
 
+  @visibleForTesting
+  static Future<void> handleForeground(RemoteMessage message) async {
+    if (!active ||
+        !ApiService.isAuthenticated ||
+        message.notification == null) {
+      return;
+    }
+    final session = ApiService.sessionRevision;
+    await SystemNotifications.show(
+      title: message.notification?.title ?? 'Moodify',
+      body: message.notification?.body ?? 'Có một lời nhắc dành cho bạn.',
+      screen: _screen(message),
+      messageId: message.messageId,
+    );
+    if (!active || session != ApiService.sessionRevision) {
+      await SystemNotifications.cancelAll();
+    }
+  }
+
   static String _screen(RemoteMessage message) =>
       message.data['screen'] == 'statistics' ? 'statistics' : 'discover';
   static void _open(String screen) {
-    if (ApiService.isAuthenticated) {
-      onOpen?.call(screen);
+    if (ApiService.isAuthenticated && onOpen != null) {
+      onOpen!.call(screen);
     } else {
       pendingScreen = screen;
     }
@@ -159,6 +173,7 @@ class PushNotifications {
 
   static Future<void> disable() async {
     active = false;
+    await SystemNotifications.cancelAll();
     final fid = _fid;
     _fid = null;
     if (fid != null && ApiService.isAuthenticated) {

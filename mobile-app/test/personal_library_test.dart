@@ -347,7 +347,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
-        2,
+        1,
       );
       expect(find.text('Chưa có nội dung đã lưu'), findsOneWidget);
       expect(calls.where((x) => x == '/api/Movies'), isEmpty);

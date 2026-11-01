@@ -21,6 +21,11 @@ if (args.Contains("--tmdb-contract")) { Console.WriteLine($"PASS: {await TmdbTes
 if (args.Contains("--tmdb-live")) { await TmdbTests.Live(root);return; }
 if (args.Contains("--live-read")) { await MongoReadCheck.Run(original);return; }
 if (args.Contains("--browser-smoke")) { await BrowserSmoke.Run(root,original);return; }
+if (args.Contains("--bilingual-real")) { await BilingualRealInferenceSmoke.Run(root,original);return; }
+if (args.Contains("--mood-edge-contract")) { Console.WriteLine($"PASS: {MobileAiEdgeTests.Run(root)} adversarial context cases.");return; }
+if (args.Contains("--mood-context-contract")) { Console.WriteLine($"PASS: {SemanticMoodMapperTests.Run()} context mapping assertions.");return; }
+if (args.Contains("--bilingual-full-audit")) { Environment.ExitCode=await BilingualMoodDiagnostics.Run(root,original,true);return; }
+if (args.Contains("--bilingual-diagnostic")) { Environment.ExitCode=await BilingualMoodDiagnostics.Run(root,original);return; }
 if (args.Contains("--real-inference")) { await RealInferenceSmoke.Run(root,original);return; }
 if (args.Contains("--real-inference-off")) { await RealInferenceSmoke.RunUnavailable(root,original);return; }
 if (args.Length > 0) throw new ArgumentException("Supported options: --browser-smoke, --live-read, --real-inference, --real-inference-off. Mongo migration: node scripts/mongo-migrate.mjs --apply");
@@ -82,7 +87,7 @@ try
     var ready = false;
     for (var i = 0; i < 50; i++)
     {
-        if (server.HasExited) throw new Exception("Backend exited during startup.");
+        if (server.HasExited) throw new Exception("Backend exited during startup: "+string.Join("\n",log.ToString().Split('\n').Where(x=>x.Contains("Exception")||x.Contains("Error")||x.Contains("exception"))));
         try { var response = await client.GetAsync("/api/Genres"); if (response.IsSuccessStatusCode) { ready = true; break; } } catch (HttpRequestException) { }
         await Task.Delay(100);
     }
@@ -581,6 +586,23 @@ try
     await PersonalLibraryTests.Run(db, Call, Check, user.TaiKhoanID, ut, ot);
     await MobileCompletionTests.Run(db, Call, Check, user.TaiKhoanID, ut, ot, at);
     await AuthNotificationTests.Run(db, Call, Check, root, database, user.TaiKhoanID, ut, ot);
+    await BilingualAnalysisTests.Run(db, Call, Check, inference, async () => {
+        if (server is { HasExited: false }) { server.Kill(entireProcessTree: true); await server.WaitForExitAsync(); }
+        server?.Dispose();
+        server=Process.Start(start)!;
+        // Logs may contain request metadata; keep output in-memory as in the original harness.
+        server.OutputDataReceived += (_,e)=> { lock(log) { if(e.Data!=null) log.AppendLine(e.Data); } };
+        server.ErrorDataReceived += (_,e)=> { lock(log) { if(e.Data!=null) log.AppendLine(e.Data); } };
+        server.BeginOutputReadLine();server.BeginErrorReadLine();
+        for(var attempt=0;attempt<80;attempt++) {
+            try { using var response=await client.GetAsync("/api/Genres"); if(response.IsSuccessStatusCode)return; }
+            catch(HttpRequestException) { }
+            await Task.Delay(100);
+        }
+        throw new Exception("Bilingual backend restart failed.");
+    });
+    await AiCompletionTests.Run(db,Call,Check,root,eit,at,ut);
+    await ModelQualityTests.Run(db,Call,Check,eit,at,ut,inference);
     Console.WriteLine($"PASS: {checks} HTTP and business assertions on an isolated MongoDB database.");
 }
 finally

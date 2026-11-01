@@ -31,7 +31,9 @@ class InferenceApiTests(unittest.TestCase):
         async def check():
             with patch.dict(os.environ, {"AI_MODEL_ENABLED": "false"}):
                 async with app.router.lifespan_context(app):
-                    self.assertEqual(live(), {"status": "live"})
+                    self.assertEqual(live()["status"], "live")
+                    self.assertIsInstance(live()["process_id"], int)
+                    self.assertGreater(live()["process_id"], 0)
                     with self.assertRaises(HTTPException) as raised:
                         ready()
                     self.assertEqual(raised.exception.status_code, 503)

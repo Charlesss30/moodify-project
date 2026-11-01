@@ -1,0 +1,1074 @@
+[
+  {
+    "id": "vi-negation-01",
+    "language": "vi",
+    "text": "Hôm nay tôi không được vui",
+    "mood": "Sad",
+    "category": "negation",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-negation-01",
+    "language": "en",
+    "text": "I am not happy today.",
+    "mood": "Sad",
+    "category": "negation",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-negation-02",
+    "language": "vi",
+    "text": "Hôm nay tôi không vui",
+    "mood": "Sad",
+    "category": "negation",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-negation-02",
+    "language": "en",
+    "text": "I don't feel happy today.",
+    "mood": "Sad",
+    "category": "negation",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-negation-03",
+    "language": "vi",
+    "text": "Tôi chẳng thấy vui chút nào",
+    "mood": "Sad",
+    "category": "negation",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-negation-03",
+    "language": "en",
+    "text": "I am not feeling very happy.",
+    "mood": "Sad",
+    "category": "negation",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-negation-04",
+    "language": "vi",
+    "text": "Tôi không cảm thấy thật sự hạnh phúc",
+    "mood": "Sad",
+    "category": "negation",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-negation-04",
+    "language": "en",
+    "text": "I do not feel particularly happy.",
+    "mood": "Sad",
+    "category": "negation",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-negation-05",
+    "language": "vi",
+    "text": "Tôi không buồn",
+    "mood": null,
+    "category": "negation",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-negation-05",
+    "language": "en",
+    "text": "I am not sad.",
+    "mood": null,
+    "category": "negation",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-negation-06",
+    "language": "vi",
+    "text": "Tôi không còn buồn nữa",
+    "mood": null,
+    "category": "negation",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-negation-06",
+    "language": "en",
+    "text": "I am no longer sad.",
+    "mood": null,
+    "category": "negation",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-negation-07",
+    "language": "vi",
+    "text": "Tôi không vui cũng không buồn",
+    "mood": null,
+    "category": "negation",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-negation-07",
+    "language": "en",
+    "text": "I am neither happy nor sad.",
+    "mood": null,
+    "category": "negation",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-negation-08",
+    "language": "vi",
+    "text": "Không phải là tôi không vui",
+    "mood": null,
+    "category": "negation",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-negation-08",
+    "language": "en",
+    "text": "I am not not happy.",
+    "mood": null,
+    "category": "negation",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-negation-09",
+    "language": "vi",
+    "text": "Tôi không buồn, tôi đang vui",
+    "mood": "Happy",
+    "category": "negation",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-negation-09",
+    "language": "en",
+    "text": "I am not sad, I feel happy.",
+    "mood": "Happy",
+    "category": "negation",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-negation-10",
+    "language": "vi",
+    "text": "Tôi không thấy buồn và đang vui",
+    "mood": "Happy",
+    "category": "negation",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-negation-10",
+    "language": "en",
+    "text": "I am not sad and I feel happy.",
+    "mood": "Happy",
+    "category": "negation",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-comparative-01",
+    "language": "vi",
+    "text": "Tôi chưa từng cảm thấy vui như hôm nay",
+    "mood": "Happy",
+    "category": "comparative",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-comparative-01",
+    "language": "en",
+    "text": "I have never felt happier than today.",
+    "mood": "Happy",
+    "category": "comparative",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-comparative-02",
+    "language": "vi",
+    "text": "Tôi chưa bao giờ thấy buồn đến thế này",
+    "mood": "Sad",
+    "category": "comparative",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-comparative-02",
+    "language": "en",
+    "text": "I've never been so sad.",
+    "mood": "Sad",
+    "category": "comparative",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-comparative-03",
+    "language": "vi",
+    "text": "Tôi không chỉ vui mà còn rất hào hứng",
+    "mood": "Excited",
+    "category": "comparative",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-comparative-03",
+    "language": "en",
+    "text": "I am not only happy but also excited.",
+    "mood": "Excited",
+    "category": "comparative",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-tense-01",
+    "language": "vi",
+    "text": "Hôm qua tôi vui nhưng hôm nay buồn",
+    "mood": "Sad",
+    "category": "tense",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-tense-01",
+    "language": "en",
+    "text": "I was happy yesterday but now I am sad.",
+    "mood": "Sad",
+    "category": "tense",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-tense-02",
+    "language": "vi",
+    "text": "Hôm qua tôi buồn nhưng hiện tại vui",
+    "mood": "Happy",
+    "category": "tense",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-tense-02",
+    "language": "en",
+    "text": "I was sad yesterday but currently I am happy.",
+    "mood": "Happy",
+    "category": "tense",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-tense-03",
+    "language": "vi",
+    "text": "Hôm qua tôi vui",
+    "mood": null,
+    "category": "tense",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-tense-03",
+    "language": "en",
+    "text": "I was happy yesterday.",
+    "mood": null,
+    "category": "tense",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-tense-04",
+    "language": "vi",
+    "text": "Ngày mai tôi sẽ vui",
+    "mood": null,
+    "category": "tense",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-tense-04",
+    "language": "en",
+    "text": "Tomorrow I will be happy.",
+    "mood": null,
+    "category": "tense",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-tense-05",
+    "language": "vi",
+    "text": "Hôm nay tôi hào hứng về chuyến đi ngày mai",
+    "mood": "Excited",
+    "category": "tense",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-tense-05",
+    "language": "en",
+    "text": "I am excited about tomorrow's trip.",
+    "mood": "Excited",
+    "category": "tense",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-goal-01",
+    "language": "vi",
+    "text": "Tôi muốn nghe nhạc vui nhưng hiện tại rất buồn",
+    "mood": "Sad",
+    "category": "goal",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-goal-01",
+    "language": "en",
+    "text": "I want happy music but right now I feel sad.",
+    "mood": "Sad",
+    "category": "goal",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-goal-02",
+    "language": "vi",
+    "text": "Tôi buồn và muốn xem phim vui",
+    "mood": "Sad",
+    "category": "goal",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-goal-02",
+    "language": "en",
+    "text": "I feel sad and want a happy movie.",
+    "mood": "Sad",
+    "category": "goal",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-goal-03",
+    "language": "vi",
+    "text": "Tôi muốn cảm thấy hạnh phúc",
+    "mood": null,
+    "category": "goal",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-goal-03",
+    "language": "en",
+    "text": "I want to feel happy.",
+    "mood": null,
+    "category": "goal",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-goal-04",
+    "language": "vi",
+    "text": "Tôi đang tìm nhạc vui",
+    "mood": null,
+    "category": "goal",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-goal-04",
+    "language": "en",
+    "text": "I am looking for happy music.",
+    "mood": null,
+    "category": "goal",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-goal-05",
+    "language": "vi",
+    "text": "Tôi hy vọng ngày mai sẽ vui",
+    "mood": null,
+    "category": "goal",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-goal-05",
+    "language": "en",
+    "text": "I hope to be happy tomorrow.",
+    "mood": null,
+    "category": "goal",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-other-01",
+    "language": "vi",
+    "text": "Bạn tôi vui",
+    "mood": null,
+    "category": "other",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-other-01",
+    "language": "en",
+    "text": "My friend is happy.",
+    "mood": null,
+    "category": "other",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-other-02",
+    "language": "vi",
+    "text": "Anh ấy rất buồn",
+    "mood": null,
+    "category": "other",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-other-02",
+    "language": "en",
+    "text": "He is very sad.",
+    "mood": null,
+    "category": "other",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-other-03",
+    "language": "vi",
+    "text": "Mẹ tôi đang vui",
+    "mood": null,
+    "category": "other",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-other-03",
+    "language": "en",
+    "text": "My mother is happy.",
+    "mood": null,
+    "category": "other",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-quote-01",
+    "language": "vi",
+    "text": "Tôi đọc câu “hôm nay vui”",
+    "mood": null,
+    "category": "quote",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-quote-01",
+    "language": "en",
+    "text": "I read: \"happy today\".",
+    "mood": null,
+    "category": "quote",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-quote-02",
+    "language": "vi",
+    "text": "Tôi nghe nói rằng “tôi vui”",
+    "mood": null,
+    "category": "quote",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-quote-02",
+    "language": "en",
+    "text": "I heard \"I am happy\".",
+    "mood": null,
+    "category": "quote",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-mixed-01",
+    "language": "vi",
+    "text": "Tôi vừa vui vừa buồn",
+    "mood": null,
+    "category": "mixed",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-mixed-01",
+    "language": "en",
+    "text": "I feel happy and sad.",
+    "mood": null,
+    "category": "mixed",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-mixed-02",
+    "language": "vi",
+    "text": "Tôi vui nhưng lo lắng",
+    "mood": null,
+    "category": "mixed",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-mixed-02",
+    "language": "en",
+    "text": "I am happy but anxious.",
+    "mood": null,
+    "category": "mixed",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-mixed-03",
+    "language": "vi",
+    "text": "Tôi buồn nhưng cũng hào hứng",
+    "mood": null,
+    "category": "mixed",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-mixed-03",
+    "language": "en",
+    "text": "I feel sad and excited.",
+    "mood": null,
+    "category": "mixed",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-unsupported-01",
+    "language": "vi",
+    "text": "Tôi rất tức giận",
+    "mood": null,
+    "category": "unsupported",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-unsupported-01",
+    "language": "en",
+    "text": "I am furious.",
+    "mood": null,
+    "category": "unsupported",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-unsupported-02",
+    "language": "vi",
+    "text": "Tôi đang cảm thấy rất lo lắng",
+    "mood": null,
+    "category": "unsupported",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-unsupported-02",
+    "language": "en",
+    "text": "I am worried and stressed.",
+    "mood": null,
+    "category": "unsupported",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-unsupported-03",
+    "language": "vi",
+    "text": "Tôi đang sợ hãi",
+    "mood": null,
+    "category": "unsupported",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-unsupported-03",
+    "language": "en",
+    "text": "I am scared.",
+    "mood": null,
+    "category": "unsupported",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-hypothetical-01",
+    "language": "vi",
+    "text": "Nếu tôi vui thì tôi sẽ nghe nhạc",
+    "mood": null,
+    "category": "hypothetical",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-hypothetical-01",
+    "language": "en",
+    "text": "If I am happy I will listen to music.",
+    "mood": null,
+    "category": "hypothetical",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-hypothetical-02",
+    "language": "vi",
+    "text": "Có lẽ tôi vui, tôi không chắc",
+    "mood": null,
+    "category": "hypothetical",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-hypothetical-02",
+    "language": "en",
+    "text": "Maybe I am happy, I am not sure.",
+    "mood": null,
+    "category": "hypothetical",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-sarcasm-01",
+    "language": "vi",
+    "text": "Tôi vui quá 🙄",
+    "mood": null,
+    "category": "sarcasm",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-sarcasm-01",
+    "language": "en",
+    "text": "Yeah right, I am so happy 🙄",
+    "mood": null,
+    "category": "sarcasm",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-content-01",
+    "language": "vi",
+    "text": "Tôi xem một bộ phim vui",
+    "mood": null,
+    "category": "content",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-content-01",
+    "language": "en",
+    "text": "I am watching a happy movie.",
+    "mood": null,
+    "category": "content",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-content-02",
+    "language": "vi",
+    "text": "Tôi nghe một bài hát buồn",
+    "mood": null,
+    "category": "content",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-content-02",
+    "language": "en",
+    "text": "I am listening to a sad song.",
+    "mood": null,
+    "category": "content",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-reaction-01",
+    "language": "vi",
+    "text": "Bộ phim này làm tôi cảm thấy vui",
+    "mood": "Happy",
+    "category": "reaction",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-reaction-01",
+    "language": "en",
+    "text": "This movie made me feel happy.",
+    "mood": "Happy",
+    "category": "reaction",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-reaction-02",
+    "language": "vi",
+    "text": "Nghe bài hát đó làm tôi buồn",
+    "mood": "Sad",
+    "category": "reaction",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-reaction-02",
+    "language": "en",
+    "text": "Listening to that song made me feel sad.",
+    "mood": "Sad",
+    "category": "reaction",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-format-01",
+    "language": "vi",
+    "text": "HÔM NAY TÔI RẤT VUI!!!",
+    "mood": "Happy",
+    "category": "format",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-format-01",
+    "language": "en",
+    "text": "I AM VERY HAPPY TODAY!!!",
+    "mood": "Happy",
+    "category": "format",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-format-02",
+    "language": "vi",
+    "text": "  Hôm nay\t tôi thấy vui  ",
+    "mood": "Happy",
+    "category": "format",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-format-02",
+    "language": "en",
+    "text": "  I feel\t happy today  ",
+    "mood": "Happy",
+    "category": "format",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-format-03",
+    "language": "vi",
+    "text": "Hôm nay tôi cảm thấy buồn 😢",
+    "mood": "Sad",
+    "category": "format",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-format-03",
+    "language": "en",
+    "text": "I feel sad today 😢",
+    "mood": "Sad",
+    "category": "format",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-polysemy-01",
+    "language": "vi",
+    "text": "Tôi đang yêu cầu một bộ phim",
+    "mood": null,
+    "category": "polysemy",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-polysemy-01",
+    "language": "en",
+    "text": "I am creating content.",
+    "mood": null,
+    "category": "polysemy",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-shorthand-01",
+    "language": "vi",
+    "text": "hom nay toi khong vui",
+    "mood": "Sad",
+    "category": "shorthand",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-shorthand-02",
+    "language": "vi",
+    "text": "hom nay t k vui",
+    "mood": "Sad",
+    "category": "shorthand",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-shorthand-03",
+    "language": "vi",
+    "text": "Hôm nay mình không được vui",
+    "mood": "Sad",
+    "category": "shorthand",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-code-switch-01",
+    "language": "vi",
+    "text": "Hôm nay I feel happy",
+    "mood": "Happy",
+    "category": "code-switch",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-code-switch-02",
+    "language": "vi",
+    "text": "Tôi feel sad today",
+    "mood": "Sad",
+    "category": "code-switch",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-code-switch-03",
+    "language": "vi",
+    "text": "Hôm nay mình không happy",
+    "mood": "Sad",
+    "category": "code-switch",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-request-01",
+    "language": "vi",
+    "text": "Vì tôi đang buồn nên tôi muốn có một bài gì đó giúp làm nổi lên cái buồn của tui. Bạn hiểu mà đúng k?",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-request-01",
+    "language": "en",
+    "text": "I am sad so I want a cheerful song to help me feel better. You know what I mean?",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-request-02",
+    "language": "vi",
+    "text": "Tôi đang buồn nên tôi muốn nghe một bài hát vui để nhẹ lòng hơn.",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-request-02",
+    "language": "en",
+    "text": "I feel sad and need a cheerful movie to improve my mood.",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-request-03",
+    "language": "vi",
+    "text": "Tôi muốn nghe nhạc vui vì tôi đang buồn.",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-request-03",
+    "language": "en",
+    "text": "I want a happy song because I feel sad today.",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-request-04",
+    "language": "vi",
+    "text": "Tôi muốn xem một phim vui vì hôm nay tôi đang buồn.",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-request-04",
+    "language": "en",
+    "text": "I want a happy film because today I feel sad.",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-request-05",
+    "language": "vi",
+    "text": "Tôi vui nên tôi muốn nghe nhạc sôi động.",
+    "mood": "Happy",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-request-05",
+    "language": "en",
+    "text": "I am happy so I want some upbeat music.",
+    "mood": "Happy",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-request-06",
+    "language": "vi",
+    "text": "Hôm qua tôi buồn. Hôm nay tôi vui nên tôi muốn nghe nhạc.",
+    "mood": "Happy",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-request-06",
+    "language": "en",
+    "text": "I was sad yesterday. Today I am happy and want some music.",
+    "mood": "Happy",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-request-07",
+    "language": "vi",
+    "text": "Tôi không được vui nên tôi muốn tìm một bài hát.",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-request-07",
+    "language": "en",
+    "text": "I am not happy so I want a song.",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-request-08",
+    "language": "vi",
+    "text": "Tôi buồn nên tôi muốn nghe nhạc vì tôi đang vui.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-request-08",
+    "language": "en",
+    "text": "I am sad so I want music because I am happy now.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-request-09",
+    "language": "vi",
+    "text": "Tôi muốn tìm phim vì hôm qua tôi buồn.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-request-09",
+    "language": "en",
+    "text": "I want a film because yesterday I was sad.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-request-10",
+    "language": "vi",
+    "text": "Bạn tôi buồn nên tôi muốn tìm nhạc vui.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-request-10",
+    "language": "en",
+    "text": "My friend is sad so I want happy music.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-request-11",
+    "language": "vi",
+    "text": "Tôi muốn cảm thấy hạnh phúc.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-request-11",
+    "language": "en",
+    "text": "I want to feel happy.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-request-12",
+    "language": "vi",
+    "text": "Nếu tôi buồn thì tôi muốn nghe nhạc.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-request-12",
+    "language": "en",
+    "text": "If I am sad I want music.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-request-13",
+    "language": "vi",
+    "text": "Tôi vừa vui vừa buồn nên tôi muốn nghe nhạc.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-request-13",
+    "language": "en",
+    "text": "I feel happy and sad so I want music.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-request-14",
+    "language": "vi",
+    "text": "Tôi tức giận nên tôi muốn nhạc vui.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-request-14",
+    "language": "en",
+    "text": "I feel angry so I want happy music.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-request-15",
+    "language": "vi",
+    "text": "Tôi đang thư giãn nên tôi muốn nghe nhạc nhẹ.",
+    "mood": "Relaxed",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-request-15",
+    "language": "en",
+    "text": "I am relaxed and want some quiet music.",
+    "mood": "Relaxed",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-request-16",
+    "language": "vi",
+    "text": "Tôi đang buồn, bạn có thể gợi ý một bài nhạc vui không?",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-request-16",
+    "language": "en",
+    "text": "I am sad, can you recommend a happy song?",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-request-17",
+    "language": "vi",
+    "text": "Tôi đang buồn hãy gợi ý nhạc vui cho tôi.",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "en-request-17",
+    "language": "en",
+    "text": "I am sad please suggest a happy film.",
+    "mood": "Sad",
+    "category": "content_request_focus",
+    "expectAbstain": false
+  },
+  {
+    "id": "vi-request-18",
+    "language": "vi",
+    "text": "Tôi muốn nhạc vì tôi tưởng tượng tôi đang vui.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-request-18",
+    "language": "en",
+    "text": "I want music because I imagine I am happy.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "vi-request-19",
+    "language": "vi",
+    "text": "Tôi muốn nhạc vì tôi giả vờ buồn.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  },
+  {
+    "id": "en-request-19",
+    "language": "en",
+    "text": "I want happy music because I pretend to feel sad.",
+    "mood": null,
+    "category": "content_request_focus",
+    "expectAbstain": true
+  }
+]

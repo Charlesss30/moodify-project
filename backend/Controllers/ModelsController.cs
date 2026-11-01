@@ -9,7 +9,7 @@ namespace mood_recommendation.Controllers;
 public class ModelsController(
     MoodAnalysisService analysis,
     AiModelRegistryService registry, ValenceArousalAnalysisService vaAnalysis, VietnameseEmotionService viAnalysis,
-    IWebHostEnvironment environment, IConfiguration configuration) : ControllerBase
+    IWebHostEnvironment environment, IConfiguration configuration, ModelQualityService quality) : ControllerBase
 {
     private const long MaxVaPackageBytes = 2L * 1024 * 1024 * 1024;
     private const long MaxVaRequestBytes = MaxVaPackageBytes + 16L * 1024 * 1024;
@@ -28,13 +28,17 @@ public class ModelsController(
     [HttpPost("vi/activate"), Authorize(Roles = "AIEngineer")]
     public async Task<IActionResult> ActivateVietnameseModel(VaModelActivationRequest request, CancellationToken ct)
     {
-        var result = await viAnalysis.ActivateAsync(request.Version, ct);
+        var actor=int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        await quality.RememberBaselineAsync("vi",actor,ct);
+        var gate=await quality.RequireAsync("vi",request.Version,ct);
+        if(gate.StatusCode!=200)return StatusCode(gate.StatusCode,gate.Body);
+        var result = await viAnalysis.ActivateAsync(request.Version, ct, ((NlpFingerprint)gate.Body).BundleSha256);
         if (result.StatusCode is >= 200 and < 300)
             return StatusCode(result.StatusCode, new { status = "ready", activeVersion = result.ActiveVersion, device = result.Device });
         return StatusCode(result.StatusCode, new { status = "error", message = result.Message ?? "Vietnamese model activation failed." });
     }
 
-    [HttpPost("vi/upload-and-activate"), Authorize(Roles = "AIEngineer")]
+    [HttpPost("vi/upload"),HttpPost("vi/upload-and-activate"), Authorize(Roles = "AIEngineer")]
     [RequestSizeLimit(MaxVaRequestBytes)]
     [RequestFormLimits(MultipartBodyLengthLimit = MaxVaRequestBytes)]
     public async Task<IActionResult> UploadVietnameseModel([FromForm] VaModelUploadRequest request, CancellationToken ct)
@@ -85,11 +89,8 @@ public class ModelsController(
             System.IO.File.Delete(packagePath);
             Directory.Move(staging, destination);
             moved = true;
-            var result = await viAnalysis.ActivateAsync(version, ct);
-            if (result.StatusCode is < 200 or >= 300)
-                return StatusCode(result.StatusCode, new { message = result.Message ?? "Vietnamese model uploaded, but failed loading/readiness. Existing English and Vietnamese active models remain unchanged.", uploadedVersion = version });
-            return Ok(new { status = "ready", language = "vi", activeVersion = result.ActiveVersion, device = result.Device,
-                message = "Vietnamese model uploaded and activated. English model was not changed." });
+            return Accepted(new{status="stored_pending_quality",language="vi",uploadedVersion=version,
+                message="Candidate stored without activation. Submit reviewed independent evaluation and approve its artifact identity first."});
         }
         catch (Exception ex) when (ex is InvalidDataException or SharpCompress.Common.ArchiveException)
         {
@@ -163,14 +164,18 @@ public class ModelsController(
     [HttpPost("va/activate"), Authorize(Roles = "AIEngineer")]
     public async Task<IActionResult> ActivateValenceArousalModel(VaModelActivationRequest request, CancellationToken ct)
     {
-        var result = await vaAnalysis.ActivateModelAsync(request.Version, ct);
+        var actor=int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        await quality.RememberBaselineAsync("va",actor,ct);
+        var gate=await quality.RequireAsync("va",request.Version,ct);
+        if(gate.StatusCode!=200)return StatusCode(gate.StatusCode,gate.Body);
+        var result = await vaAnalysis.ActivateModelAsync(request.Version, ct, ((NlpFingerprint)gate.Body).BundleSha256);
         if (result.StatusCode is >= 200 and < 300)
             return StatusCode(result.StatusCode, new { status = "ready", activeVersion = result.ActiveVersion, device = result.Device });
         return StatusCode(result.StatusCode,
             new { status = "error", message = result.Message ?? "Model activation failed." });
     }
 
-    [HttpPost("va/upload-and-activate"), Authorize(Roles = "AIEngineer")]
+    [HttpPost("va/upload"),HttpPost("va/upload-and-activate"), Authorize(Roles = "AIEngineer")]
     [RequestSizeLimit(MaxVaRequestBytes)]
     [RequestFormLimits(MultipartBodyLengthLimit = MaxVaRequestBytes)]
     public async Task<IActionResult> UploadAndActivateValenceArousalModel(
@@ -223,12 +228,8 @@ public class ModelsController(
             System.IO.File.Delete(packagePath);
             Directory.Move(staging, destination);
             moved = true;
-            var activated = await vaAnalysis.ActivateModelAsync(version, ct);
-            if (activated.StatusCode is < 200 or >= 300)
-                return StatusCode(activated.StatusCode,
-                    new { message = activated.Message ?? "Upload succeeded, but the model did not pass loading and readiness checks. The current model remains active.", uploadedVersion = version });
-            return Ok(new { status = "ready", activeVersion = activated.ActiveVersion, device = activated.Device,
-                message = "Model uploaded, loaded, and activated." });
+            return Accepted(new{status="stored_pending_quality",language="en",uploadedVersion=version,
+                message="Candidate stored without activation. Submit reviewed independent evaluation and approve its artifact identity first."});
         }
         catch (Exception ex) when (ex is InvalidDataException or SharpCompress.Common.ArchiveException)
         {

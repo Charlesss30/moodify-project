@@ -1,5 +1,6 @@
 import { enhanceList, allPages } from './list-controls.js'
 import { request } from './api.js'
+import { mountPolicyTools } from './ai-tools.js'
 import { fillMissingImages } from './media.js'
 
 const esc = (v = '') => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))
@@ -114,6 +115,9 @@ export async function mountManagement(host, tab, user, page = 1, search = '', mo
       bindForm('#mapping-approve',async data=>{
         await request('/Models/mapping',{method:'PUT',body:JSON.stringify({expectedRevision:mapping.revision,labels:mapping.labels.map(x=>({label:x.label,moodId:data[x.label]?Number(data[x.label]):null}))})})
         await reload()
+        if(modelSection === 'aiMapping') {
+          await mountPolicyTools(host)
+        }
       })
       const registryAction=async(path,body)=>{await request(path,{method:'POST',body:body?JSON.stringify(body):'{}'});await reload()}
       host.querySelectorAll('[data-model-action]').forEach(button=>button.addEventListener('click',async()=>{
@@ -145,8 +149,14 @@ export async function mountManagement(host, tab, user, page = 1, search = '', mo
       const sections = { aiMapping: ['Approve emotion-to-mood mapping', 'Local content coverage'], aiEvaluation: ['Offline evaluation'], aiTest: ['Test English text'], aiAudit: ['Registry audit (latest 100)'] }
       const keep = modelSection ? sections[modelSection] : ['Inference runtime', 'Allowlisted model versions', 'Registry audit (latest 100)', ...(String(user.vaiTro).toLowerCase() === 'aiengineer' ? [] : ['Offline evaluation'])]
       host.querySelectorAll('section.panel').forEach(p => { if (!keep?.includes(p.querySelector('h2')?.textContent)) p.remove() })
-      const title = { aiMapping: 'Emotion mapping', aiEvaluation: 'Evaluation', aiTest: 'Inference lab', aiAudit: 'Audit log' }[modelSection]
+      const title = { aiMapping: 'GoEmotions mapping', aiEvaluation: 'Evaluation', aiTest: 'Inference lab', aiAudit: 'Audit log' }[modelSection]
       if (title && host.querySelector('h1')) host.querySelector('h1').textContent = title
+      if (modelSection === 'aiMapping') {
+        const scope = document.createElement('p')
+        scope.className = 'ai-language-note'
+        scope.textContent = 'This mapping applies only to the 28-label GoEmotions classifier. Mobile/Web bilingual analysis uses versioned VA policies and the mood regions shown in AI overview.'
+        host.querySelector('h1')?.after(scope)
+      }
     }
     if(tab !== 'overview' && tab !== 'recommend' && tab !== 'models') enhanceList(host, {nodes:tab === 'moods' ? [...host.querySelectorAll('details')] : undefined,filterColumn:tab === 'users' ? 2 : ['feedback','models'].includes(tab) ? 2 : undefined,filterLabel:tab === 'users' ? 'Role' : tab === 'models' ? 'Status' : 'Stars',dateLabel:['history','feedback'].includes(tab)?'Date':'Updated',dateAvailable:tab!=='models'})
     host.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>mountManagement(host,tab,user,Number(b.dataset.page),search)))

@@ -46,19 +46,67 @@ function Save-State($State) {
     Move-Item -LiteralPath $tempPath -Destination $statePath -Force
 }
 
-function Test-ExpectedProcess($Entry) {
-    $process = Get-ProcessRecord ([int]$Entry.Pid)
-    if (-not $process -or $process.CommandLine -notlike "*$($Entry.CommandMatch)*") {
+function Test-RecordedProcessIdentity($Process, $Entry, [switch]$Worker) {
+    if (-not $Process -or $Process.CommandLine -notlike "*$($Entry.CommandMatch)*") {
         return $false
     }
+    $timestamp = $null
+    if ($Worker) {
+        if ([int]$Process.ParentProcessId -ne [int]$Entry.Pid) { return $false }
+        if ($Entry.PSObject.Properties["WorkerPid"] -and
+            [int]$Process.ProcessId -eq [int]$Entry.WorkerPid -and
+            $Entry.PSObject.Properties["WorkerCreatedAtUtc"]) {
+            $timestamp = $Entry.WorkerCreatedAtUtc
+        }
+    }
+    elseif ($Entry.PSObject.Properties["CreatedAtUtc"]) {
+        $timestamp = $Entry.CreatedAtUtc
+    }
+    if ($timestamp) {
+        try {
+            $expected = [DateTimeOffset]::Parse([string]$timestamp).UtcDateTime
+            $actual = ([DateTime]$Process.CreationDate).ToUniversalTime()
+            if ([math]::Abs(($actual - $expected).TotalMilliseconds) -gt 1) { return $false }
+        }
+        catch { return $false }
+    }
+    return $true
+}
+
+function Get-VerifiedManagedProcesses($Entry) {
+    $parent = Get-ProcessRecord ([int]$Entry.Pid)
+    $parentMatches = Test-RecordedProcessIdentity $parent $Entry
+    $verified = @{}
+    if ($parentMatches) { $verified[[int]$parent.ProcessId] = $parent }
+    if ($Entry.PSObject.Properties["WorkerPid"]) {
+        $worker = Get-ProcessRecord ([int]$Entry.WorkerPid)
+        if (Test-RecordedProcessIdentity $worker $Entry -Worker) {
+            $verified[[int]$worker.ProcessId] = $worker
+        }
+    }
+    # Startup can fail before a newly launched worker has been saved to state.
+    # Discover it only beneath a verified parent, never through the port alone.
+    if ($parentMatches -and $Entry.Port -gt 0) {
+        $listener = Get-Listener ([int]$Entry.Port)
+        if ($listener -and [int]$listener.OwningProcess -ne [int]$Entry.Pid) {
+            $worker = Get-ProcessRecord ([int]$listener.OwningProcess)
+            if (Test-RecordedProcessIdentity $worker $Entry -Worker) {
+                $verified[[int]$worker.ProcessId] = $worker
+            }
+        }
+    }
+    return @($verified.Values)
+}
+
+function Test-ExpectedProcess($Entry) {
+    $process = Get-ProcessRecord ([int]$Entry.Pid)
+    if (-not (Test-RecordedProcessIdentity $process $Entry)) { return $false }
     if ($Entry.Port -gt 0) {
         $listener = Get-Listener ([int]$Entry.Port)
         if (-not $listener) { return $false }
         if ([int]$listener.OwningProcess -eq [int]$Entry.Pid) { return $true }
         $worker = Get-ProcessRecord ([int]$listener.OwningProcess)
-        return $null -ne $worker -and
-            [int]$worker.ParentProcessId -eq [int]$Entry.Pid -and
-            $worker.CommandLine -like "*$($Entry.CommandMatch)*"
+        return Test-RecordedProcessIdentity $worker $Entry -Worker
     }
     return $true
 }
@@ -121,6 +169,7 @@ function Start-HiddenProcess(
     $entry = [pscustomobject]@{
         Name = $Name
         Pid = $process.Id
+        CreatedAtUtc = $process.StartTime.ToUniversalTime().ToString("o")
         Port = $Port
         CommandMatch = $CommandMatch
         Stdout = $stdout
@@ -139,62 +188,37 @@ function Stop-ManagedProcesses($State) {
     $entries = @($State.Processes)
     [array]::Reverse($entries)
     foreach ($entry in $entries) {
-        $process = Get-ProcessRecord ([int]$entry.Pid)
-        if ($process -and $process.CommandLine -notlike "*$($entry.CommandMatch)*") {
-            throw "$($entry.Name): PID $($entry.Pid) no longer matches the recorded executable; refusing to stop it."
-        }
-        $processIds = @()
-        if ($entry.PSObject.Properties["WorkerPid"] -and [int]$entry.WorkerPid -ne [int]$entry.Pid) {
-            $recordedWorker = Get-ProcessRecord ([int]$entry.WorkerPid)
-            if ($recordedWorker -and
-                ([int]$recordedWorker.ParentProcessId -ne [int]$entry.Pid -or
-                 $recordedWorker.CommandLine -notlike "*$($entry.CommandMatch)*")) {
-                throw "$($entry.Name): recorded worker PID $($entry.WorkerPid) no longer matches its verified service parent; refusing to stop it."
-            }
-            if ($recordedWorker) { $processIds += [int]$recordedWorker.ProcessId }
-        }
+        $owned = @(Get-VerifiedManagedProcesses $entry)
         if ($entry.Port -gt 0) {
             $listener = Get-Listener ([int]$entry.Port)
-            if ($listener) {
-                if ([int]$listener.OwningProcess -eq [int]$entry.Pid) {
-                    if (-not $process) {
-                        throw "$($entry.Name): port $($entry.Port) is owned by an unverifiable recorded PID; refusing to stop it."
-                    }
-                }
-                else {
-                    $worker = Get-ProcessRecord ([int]$listener.OwningProcess)
-                    if (-not $worker -or
-                        [int]$worker.ParentProcessId -ne [int]$entry.Pid -or
-                        $worker.CommandLine -notlike "*$($entry.CommandMatch)*") {
-                        throw "$($entry.Name): port $($entry.Port) has changed to an unowned process; refusing to stop it."
-                    }
-                    if ($processIds -notcontains [int]$worker.ProcessId) {
-                        $processIds += [int]$worker.ProcessId
-                    }
-                }
+            if ($listener -and [int]$listener.OwningProcess -notin @($owned | ForEach-Object { [int]$_.ProcessId })) {
+                throw "$($entry.Name): port $($entry.Port) is owned by an unverified process; refusing to stop it."
             }
         }
-        if ($process) {
-            $processIds += [int]$entry.Pid
-        }
-        elseif ($processIds.Count -eq 0) {
-            Write-Output "$($entry.Name): process already exited."
+        if ($owned.Count -eq 0) {
+            Write-Output "$($entry.Name): previous process exited or PID was reused; no unrelated process was stopped."
             continue
         }
-        foreach ($processId in $processIds) {
-            if (Get-ProcessRecord $processId) {
-                Stop-Process -Id $processId
-                try {
-                    Wait-Process -Id $processId -Timeout 10 -ErrorAction Stop
-                }
-                catch {
-                    if (Get-ProcessRecord $processId) {
-                        throw "$($entry.Name): PID $processId did not exit after 10 seconds."
-                    }
+        # Stop verified children before the launcher. Recheck identity immediately
+        # before each stop so a process that exited in the meantime is not confused
+        # with another process that Windows has assigned the same PID.
+        foreach ($record in @($owned | Sort-Object { [int]$_.ProcessId -eq [int]$entry.Pid })) {
+            $processId = [int]$record.ProcessId
+            $current = Get-ProcessRecord $processId
+            if (-not $current) { continue }
+            if ($current.CommandLine -ne $record.CommandLine -or
+                $current.CreationDate -ne $record.CreationDate) {
+                throw "$($entry.Name): PID $processId changed during shutdown; refusing to stop it."
+            }
+            Stop-Process -Id $processId
+            try { Wait-Process -Id $processId -Timeout 10 -ErrorAction Stop }
+            catch {
+                if (Get-ProcessRecord $processId) {
+                    throw "$($entry.Name): PID $processId did not exit after 10 seconds."
                 }
             }
         }
-        Write-Output "$($entry.Name): stopped PID $($entry.Pid)."
+        Write-Output "$($entry.Name): stopped verified service processes."
     }
     Remove-Item -LiteralPath $statePath -Force -ErrorAction SilentlyContinue
     Write-Output "Stopped managed processes only. Registry activation was not changed."
@@ -255,7 +279,7 @@ if ($Action -eq "Stop") {
 $existingState = Read-State
 if ($existingState) {
     $liveEntries = @($existingState.Processes | Where-Object {
-        $null -ne (Get-ProcessRecord ([int]$_.Pid))
+        @(Get-VerifiedManagedProcesses $_).Count -gt 0
     })
     if ($liveEntries.Count -gt 0) {
         $requestedAi = -not $WithoutAI
@@ -269,6 +293,7 @@ if ($existingState) {
         }
         throw "A partial managed stack is present. Run -Action Stop, inspect the service logs, then start again."
     }
+    Write-Output "Discarding stale service records; reused PIDs were not stopped."
     Remove-Item -LiteralPath $statePath -Force
 }
 
@@ -347,7 +372,7 @@ try {
                     Where-Object { $_ -ge 0 } | Measure-Object -Minimum).Minimum
                 $minimumVramMiB = if ($hasEmotionModel -and $hasVaModel) { 3500 } elseif ($hasEmotionModel) { 2500 } else { 1200 }
                 if ($null -ne $freeVramMiB -and $freeVramMiB -lt $minimumVramMiB) {
-                    throw "Only $freeVramMiB MiB GPU memory is free; at least $minimumVramMiB MiB is required for the configured local model(s)."
+                    Write-Warning "Only $freeVramMiB MiB GPU memory is free; $minimumVramMiB MiB is recommended. Attempting the configured models; startup still requires real readiness and stops managed services on failure."
                 }
             }
         }
@@ -419,6 +444,7 @@ try {
                 throw "Inference port is owned by a process outside the recorded service tree."
             }
             $inferenceEntry | Add-Member -NotePropertyName WorkerPid -NotePropertyValue ([int]$worker.ProcessId) -Force
+            $inferenceEntry | Add-Member -NotePropertyName WorkerCreatedAtUtc -NotePropertyValue ($worker.CreationDate.ToUniversalTime().ToString("o")) -Force
             Save-State $script:state
         }
     }
@@ -447,7 +473,7 @@ try {
     $null = Invoke-Readiness "http://127.0.0.1:${adminPort}/" 45
     Write-Output "Admin Web ready at http://127.0.0.1:${adminPort}/."
     if (-not $WithoutAI) {
-        Write-Output "Runtime is ready, but registry activation is separate. Sign in as Admin/AIEngineer, validate the candidate and activate it in Admin > Models."
+        Write-Output "Runtime is ready; existing active versions were checked above. Deploy new VI/VA candidates through AI Engineer quality review. The GoEmotions registry is separate."
     }
     else {
         Write-Output "AI inference is disabled for this run; manual/rule-based recommendations remain available."

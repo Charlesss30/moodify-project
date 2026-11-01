@@ -1,15 +1,38 @@
 # Khôi phục database Moodify trên máy người nhận
 
-Hướng dẫn dành cho bản xuất bằng `mongodump --db mood_recommendation --out "D:\moodify-project\database_backup"`. Bản local kiểm kê ngày 10/10/2026 có 16 file BSON cùng metadata. Đây mới là kiểm kê file, chưa phải xác nhận restore thử bản BSON này. Không dùng kết quả kiểm thử bản JSON trước đó để kết luận bản này đã được kiểm thử.
+Cập nhật ngày **01/11/2026**: bản backup local mới nằm tại **`D:\hoc-tap\moodify-project\database_backup\mood_recommendation`**. Đã xuất bằng `mongodump` và thử khôi phục sang database tạm thành công: **25 file BSON + 25 file metadata JSON**, cùng file phụ của công cụ. Bản này chứa dữ liệu mẫu 35 ngày cho tài khoản được yêu cầu; xem [dữ liệu demo cá nhân](USER_DEMO_DATA.md).
+
+Các lệnh bên dưới dùng thư mục cha `database_backup`. Nếu bản nhận có tên thư mục khác, thay đường dẫn cuối tương ứng. Không cần insert từng collection thủ công.
+
+## 0. Xuất bản backup mới trên máy chủ project
+
+Dừng các thao tác ghi từ app/backend trong lúc xuất để tránh dữ liệu giữa các collection lệch thời điểm. Giữ MongoDB Server đang chạy. Mở PowerShell:
+
+```powershell
+cd D:\hoc-tap\moodify-project
+
+# Dùng thư mục mới, tránh lẫn file từ một lần dump cũ.
+if (Test-Path -LiteralPath '.\database_backup') {
+    throw 'database_backup đã tồn tại. Đổi tên/cất bản cũ trước khi xuất bản mới.'
+}
+
+mongodump --uri="mongodb://127.0.0.1:27017" --db="mood_recommendation" --out=".\database_backup"
+if ($LASTEXITCODE -ne 0) { throw 'Backup thất bại; kiểm tra log mongodump.' }
+
+# Xem các file .bson và .metadata.json vừa xuất.
+Get-ChildItem -LiteralPath '.\database_backup\mood_recommendation'
+```
+
+JSON ở đây là metadata; document nằm trong BSON. Không đổi đuôi file hoặc dùng mongoimport cho BSON. Trong repository hiện tại, 33 file dump đã được Git theo dõi; 18 file mới đang bị quy tắc `database_backup/` trong `.gitignore` bỏ qua. Bản local đầy đủ có **51 file**. Muốn chuyển trọn bản mới nhất cho người nhận, gửi nguyên thư mục `database_backup/mood_recommendation`, hoặc chủ động kiểm tra đủ file khi đưa lên Git. Hướng dẫn này không tự commit/push.
 
 ## 1. Chuẩn bị phần mềm và backup
 
 - Cài MongoDB Community Server và bật dịch vụ MongoDB, mặc định cổng 27017.
 - Cài [MongoDB Database Tools](https://www.mongodb.com/docs/database-tools/installation/), thêm thư mục `bin` của tools vào PATH rồi mở lại terminal. Compass là giao diện quản lý, không thay thế Database Tools hoặc MongoDB Server.
-- Clone source Moodify và nhận folder backup qua kênh chia sẻ riêng. Giải nén sao cho có cấu trúc:
+- Clone source Moodify có kèm folder `database_backup`, hoặc nhận backup riêng và giải nén sao cho có cấu trúc:
 
 ```text
-D:\moodify-project\database_backup\
+D:\hoc-tap\moodify-project\database_backup\
   mood_recommendation\
     accounts.bson
     accounts.metadata.json
@@ -63,7 +86,7 @@ Sau đó cấu hình backend dùng `moodify_received`. Không thêm `--drop` khi
 ## 4. Kiểm tra sau khôi phục
 
 1. Đọc tổng kết: số document đã restore phải phù hợp với bản nhận và số failed bằng 0. Nếu `0 restored` toàn bộ, kiểm tra cấu trúc giải nén, đường dẫn và bộ lọc namespace.
-2. Refresh Compass, mở đúng database đích. Đối với bản đang chia sẻ có 16 collection, gồm accounts, contents, movies, music, genres, moods, ratings, moodHistory, interactions và các collection AI/counters. Một collection có thể hợp lệ dù không có document.
+2. Refresh Compass, mở đúng database đích và đối chiếu các collection với file BSON nhận được. Catalog, accounts, moodHistory, ratings và các collection AI/metadata có số lượng tùy thời điểm xuất; một collection có thể hợp lệ dù không có document.
 3. Kiểm tra vài tên phim/bài hát, vùng mood và index; không chỉ dựa vào việc thấy tên database.
 
 Số document phụ thuộc thời điểm xuất. Con số 369 trong hướng dẫn backup cũ là của bản JSON ngày 09/10/2026, không phải số đã xác minh cho bản BSON này.
@@ -97,7 +120,7 @@ Chạy Flutter theo README: emulator dùng `http://10.0.2.2:5170`; web/Windows d
 - Khóa TMDB/Spotify: cấu hình riêng để tra cứu/nhập mới từ nhà cung cấp. Metadata đã lưu vẫn phụ thuộc URL ảnh/video và dịch vụ ngoài khi hiển thị/phát.
 - Phim và file nhạc đầy đủ: hệ thống sử dụng metadata, ID/URL và player nhà cung cấp.
 
-Folder backup có tài khoản/password hash, lịch sử và đánh giá của máy xuất; chỉ chia sẻ cho người được phép. Muốn phát hành demo công khai cần bản đã làm sạch. `database_backup/` được gitignore; hướng dẫn này được đưa lên GitHub, còn backup gửi riêng.
+Folder backup có tài khoản/password hash, lịch sử và đánh giá của máy xuất; chỉ chia sẻ cho người được phép. Muốn phát hành demo công khai cần bản đã làm sạch. Quy tắc ignore không làm các file đã tracked ngừng được theo dõi; cần kiểm tra cả file mới nếu chia sẻ qua Git.
 
 ## Lỗi thường gặp
 

@@ -1,4 +1,4 @@
-﻿using MongoDB.Bson;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using mood_recommendation.Data;
@@ -6,13 +6,13 @@ using mood_recommendation.Models;
 
 namespace mood_recommendation.Services;
 
-public sealed record RankedContent(NoiDungGiaiTri Content, double Score, double MoodScore, double? ContentScore, double? CollaborativeScore);
+public sealed record RankedContent(NoiDungGiaiTri Content, double Score, double MoodScore, double? ContentScore, double? CollaborativeScore, string? CollaborativeVersion = null);
 
 // Transparent baseline: explicit/weak implicit feedback updates the profile at request time.
 // This is a feedback loop, not reinforcement learning or a pretrained neural recommender.
-public sealed class HybridRecommender(MongoStore db)
+public sealed class HybridRecommender(MongoStore db, MatrixFactorizationService? mf = null)
 {
-    public async Task<IReadOnlyList<RankedContent>> RankAsync(List<NoiDungGiaiTri> candidates, int userId, decimal v, decimal a, string mode)
+    public async Task<IReadOnlyList<RankedContent>> RankAsync(List<NoiDungGiaiTri> candidates, int userId, decimal v, decimal a, string mode, HybridWeights? weights = null)
     {
         var ratings = await db.DanhGias.OrderByDescending(x => x.ThoiGian).ThenByDescending(x => x.DanhGiaID).Take(20000).ToListAsync();
         var events = await db.Database.GetCollection<BsonDocument>("interactions").Find(new BsonDocument("accountId", userId))
@@ -21,13 +21,15 @@ public sealed class HybridRecommender(MongoStore db)
             .Select(x => x["contentId"].AsString).Distinct().ToHashSet();
         // Profile must not change merely because the request filters Movie vs Song.
         var library = await db.Hydrate(await db.NoiDungGiaiTris.ToListAsync());
-        return Rank(candidates, library, ratings, implicitIds, userId, v, a, mode);
+        var factorScores = mf is null ? null : await mf.ScoresAsync(userId,candidates.Select(x=>x.NoiDungID),CancellationToken.None);
+        return Rank(candidates, library, ratings, implicitIds, userId, v, a, mode,factorScores,weights);
     }
 
     public static IReadOnlyList<RankedContent> Rank(IReadOnlyList<NoiDungGiaiTri> candidates,
         IReadOnlyList<NoiDungGiaiTri> library, IReadOnlyList<DanhGia> ratings, IReadOnlySet<string> implicitIds,
-        int userId, decimal v, decimal a, string mode)
+        int userId, decimal v, decimal a, string mode, MfScores? factorScores = null, HybridWeights? weights = null)
     {
+        weights ??= new HybridWeights();
         var features = library.Concat(candidates).GroupBy(x => x.NoiDungID).ToDictionary(g => g.Key, g => Features(g.First()));
         var latest = ratings.OrderByDescending(x => x.ThoiGian).ThenByDescending(x => x.DanhGiaID)
             .GroupBy(x => (x.TaiKhoanID, x.NoiDungID)).Select(g => g.First()).ToArray();
@@ -59,17 +61,19 @@ public sealed class HybridRecommender(MongoStore db)
             var votes = neighbors.Where(x => x.Values.ContainsKey(item.NoiDungID)).ToArray();
             double? collaborative = votes.Length > 0
                 ? Math.Clamp((votes.Sum(x => x.Similarity * x.Values[item.NoiDungID]) / votes.Sum(x => x.Similarity) + 1) / 2, 0, 1) : null;
+            var hasFactor = mode == "hybrid" && factorScores?.Scores.TryGetValue(item.NoiDungID,out _) == true;
+            if(hasFactor) collaborative=factorScores!.Scores[item.NoiDungID];
             var score = mood;
             if (mode == "content") score = content ?? mood;
             if (mode == "hybrid") {
-                var numerator = .55 * mood; var denominator = .55;
-                if (content.HasValue) { numerator += .30 * content.Value; denominator += .30; }
-                if (collaborative.HasValue) { numerator += .15 * collaborative.Value; denominator += .15; }
+                var numerator = weights.Mood * mood; var denominator = weights.Mood;
+                if (content.HasValue) { numerator += weights.Content * content.Value; denominator += weights.Content; }
+                if (collaborative.HasValue) { numerator += weights.Collaborative * collaborative.Value; denominator += weights.Collaborative; }
                 score = numerator / denominator;
             }
             // Explicit dislike wins over weak implicit events and discourages repeated disliked items.
             if (mode != "mood" && own.GetValueOrDefault(item.NoiDungID) < 0) score *= .5;
-            results.Add(new(item, score, mood, content, collaborative));
+            results.Add(new(item, score, mood, content, collaborative,hasFactor?factorScores!.Version:null));
         }
         return results.OrderByDescending(x => x.Score).ThenBy(x => MoodScoring.DistanceSquared(x.Content.Valence, x.Content.Arousal, v, a)).ThenBy(x => x.Content.NoiDungID, StringComparer.Ordinal).ToArray();
     }

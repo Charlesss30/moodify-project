@@ -88,9 +88,22 @@ builder.Services.AddHttpClient("ValenceArousalInference", client =>
 });
 builder.Services.AddHttpClient("VietnameseInference", client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["AI:InferenceBaseUrl"] ?? "http://127.0.0.1:8001/");
+    client.BaseAddress = new Uri(builder.Configuration["AI:ServiceUrl"] ?? builder.Configuration["AI:InferenceBaseUrl"] ?? "http://127.0.0.1:8001/");
     client.Timeout = TimeSpan.FromMinutes(4);
 });
+builder.Services.AddHttpClient("MoodInference", client =>
+{
+    // Inference has the same bounded deadline for both languages. Model loading uses its separate client.
+    client.BaseAddress = new Uri(builder.Configuration["AI:ServiceUrl"]
+        ?? builder.Configuration["AI:InferenceBaseUrl"] ?? "http://127.0.0.1:8001/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+builder.Services.AddSingleton<RecommendationStrategyService>();
+builder.Services.AddSingleton<ModelQualityService>();
+builder.Services.AddSingleton<MatrixFactorizationService>();
+builder.Services.AddSingleton<BilingualPolicyService>();
+builder.Services.AddSingleton<BilingualMoodAnalysisService>();
 builder.Services.AddSingleton<MoodAnalysisService>();
 builder.Services.AddSingleton<ValenceArousalAnalysisService>();
 builder.Services.AddSingleton<VietnameseEmotionService>();

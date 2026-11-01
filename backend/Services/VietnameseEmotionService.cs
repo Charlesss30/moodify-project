@@ -10,14 +10,14 @@ public sealed record VietnameseCandidate(
     [property: JsonPropertyName("checkpoint")] string Checkpoint,
     [property: JsonPropertyName("tokenizer_available")] bool TokenizerAvailable);
 public sealed record VietnameseCatalog(IReadOnlyList<VietnameseCandidate> Items, string? ActiveVersion);
-public sealed record VietnameseRuntime(string Status, bool Ready, string? ModelVersion, string? Language, string? InferenceDevice);
+public sealed record VietnameseRuntime(string Status, bool Ready, string? ModelVersion, string? Language, string? InferenceDevice, string? PreprocessingStatus=null, string? PreprocessingSha256=null);
 public sealed record VietnameseActivation(int StatusCode, string? Message, string? ActiveVersion, string? Device);
 public sealed record VietnameseEmotionCandidate(string Label, double Score);
 public sealed record VietnamesePrediction(string ModelVersion, string Emotion, double Confidence, bool Accepted,
     IReadOnlyList<VietnameseEmotionCandidate> EmotionCandidates,
     double Valence, double Arousal, int MoodId, string MoodName, decimal MoodValence, decimal MoodArousal);
 
-public sealed class VietnameseEmotionService(IHttpClientFactory clients, MongoStore db)
+public sealed class VietnameseEmotionService(IHttpClientFactory clients, MongoStore db, IConfiguration configuration)
 {
     public async Task<VietnameseRuntime> RuntimeStatusAsync(CancellationToken ct)
     {
@@ -26,7 +26,7 @@ public sealed class VietnameseEmotionService(IHttpClientFactory clients, MongoSt
             using var response = await clients.CreateClient("VietnameseInference").GetAsync("health/vi/ready", ct);
             if (!response.IsSuccessStatusCode) return new("unavailable", false, null, "vi", null);
             var health = await response.Content.ReadFromJsonAsync<ViHealth>(cancellationToken: ct);
-            return new("ready", true, health?.ModelVersion, health?.Language, health?.Device);
+            return new("ready", true, health?.ModelVersion, health?.Language, health?.Device, health?.PreprocessingStatus,health?.PreprocessingSha256);
         }
         catch (HttpRequestException) { return new("unavailable", false, null, "vi", null); }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested) { return new("unavailable", false, null, "vi", null); }
@@ -45,12 +45,12 @@ public sealed class VietnameseEmotionService(IHttpClientFactory clients, MongoSt
         catch (TaskCanceledException) when (!ct.IsCancellationRequested) { return new([], null); }
     }
 
-    public async Task<VietnameseActivation> ActivateAsync(string version, CancellationToken ct)
+    public async Task<VietnameseActivation> ActivateAsync(string version, CancellationToken ct, string? expectedFingerprint=null)
     {
         try
         {
             using var response = await clients.CreateClient("VietnameseInference")
-                .PostAsJsonAsync("models/vi/activate", new { version }, ct);
+                .PostAsJsonAsync("models/vi/activate", new { version, expected_fingerprint=expectedFingerprint }, ct);
             var result = await response.Content.ReadFromJsonAsync<ViActivation>(cancellationToken: ct);
             return new((int)response.StatusCode, result?.Message ?? result?.Detail, result?.ActiveVersion, result?.Device);
         }
@@ -60,6 +60,7 @@ public sealed class VietnameseEmotionService(IHttpClientFactory clients, MongoSt
 
     public async Task<VietnamesePrediction?> AnalyzeAsync(string text, CancellationToken ct)
     {
+        if (!configuration.GetValue<bool>("AI:Enabled")) return null;
         try
         {
             using var response = await clients.CreateClient("VietnameseInference")
@@ -99,6 +100,8 @@ public sealed class VietnameseEmotionService(IHttpClientFactory clients, MongoSt
         [JsonPropertyName("model_version")] public string? ModelVersion { get; init; }
         [JsonPropertyName("language")] public string? Language { get; init; }
         [JsonPropertyName("inference_device")] public string? Device { get; init; }
+        [JsonPropertyName("preprocessing_status")] public string? PreprocessingStatus { get; init; }
+        [JsonPropertyName("preprocessing_sha256")] public string? PreprocessingSha256 { get; init; }
     }
     private sealed class ViCatalog
     {

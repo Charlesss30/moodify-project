@@ -1,5 +1,6 @@
 ﻿"""Inference adapter for the EmoBank RoBERTa valence/arousal checkpoint."""
 from pathlib import Path
+from artifact_fingerprint import fingerprint_files
 import math
 
 import torch
@@ -32,6 +33,7 @@ class ValenceArousalPredictor:
         if not (tokenizer_path / "tokenizer.json").is_file():
             raise FileNotFoundError("Saved RoBERTa tokenizer is unavailable.")
 
+        before = fingerprint_files("va", checkpoint.parent, model_version, checkpoint)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model_version = model_version
         self.tokenizer = RobertaTokenizerFast.from_pretrained(
@@ -43,6 +45,9 @@ class ValenceArousalPredictor:
             raise ValueError("Checkpoint must contain a PyTorch state dictionary.")
         self.model.load_state_dict(weights, strict=True)
         self.model.to(self.device).eval()
+        self.artifact_fingerprint = fingerprint_files("va", checkpoint.parent, model_version, checkpoint)
+        if before["bundleSha256"] != self.artifact_fingerprint["bundleSha256"]:
+            raise ValueError("Model files changed during loading; refusing a mixed artifact.")
 
     def predict(self, text: str) -> dict:
         if not isinstance(text, str) or not text.strip() or len(text) > 4000:

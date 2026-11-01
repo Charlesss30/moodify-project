@@ -37,6 +37,14 @@ void main() {
         } else if (r.url.path.endsWith('/MoodAnalysis/valence-arousal')) {
           data = {
             'status': 'matched',
+            'source': 'ai_va',
+            'accepted': true,
+            'requiresConfirmation': true,
+            'analysisId': 'va_0123456789abcdef0123456789abcdef',
+            'expiresAt': '2099-01-01T00:00:00Z',
+            'mappingVersion': 'fixture-policy-v1',
+            'modelType': 'valence_arousal_regression',
+            'scoreType': 'regression_coordinates',
             'language': 'en',
             'modelVersion': 'roberta_va_test',
             'valence': 0.73,
@@ -65,11 +73,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Xác nhận và nhận gợi ý'));
       await tester.pumpAndSettle();
-      expect(requests.single['analysisId'], isNull);
+      expect(
+        requests.single['analysisId'],
+        'va_0123456789abcdef0123456789abcdef',
+      );
       expect(requests.single['source'], 'ai_va');
-      expect(requests.single['modelVersion'], 'roberta_va_test');
-      expect(requests.single['valence'], 0.73);
-      expect(requests.single['arousal'], 0.24);
+      expect(requests.single.containsKey('modelVersion'), isFalse);
+      expect(requests.single.containsKey('valence'), isFalse);
+      expect(requests.single.containsKey('arousal'), isFalse);
       await tester.tap(find.text('Nhạc'));
       await tester.pumpAndSettle();
       expect(find.textContaining('Đã đổi loại nội dung'), findsOneWidget);

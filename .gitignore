@@ -74,3 +74,6 @@ docs/TMDB_DATA_MIGRATION_RESULTS.json
 **/service-account*.json
 **/google-services.json
 **/GoogleService-Info.plist
+
+# Private manual label reviews
+docs/ai-evaluation/completed/

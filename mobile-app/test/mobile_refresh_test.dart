@@ -125,6 +125,68 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets(
+    'central Discovery destination preserves page routes and lazy Library loading',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final calls = <String>[];
+      ApiService.clientFactory = () => MockClient((request) async {
+        calls.add(request.url.path);
+        if (request.url.path.endsWith('/MoodMapping')) {
+          return json([
+            {'tamTrangID': 1, 'tenTamTrang': 'Happy'},
+          ]);
+        }
+        if (request.url.path.endsWith('/Movies')) return json([]);
+        throw StateError(request.url.path);
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppShell(currentUser: user, onLogoutConfirmed: () {}),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Để sau'));
+      await tester.pumpAndSettle();
+      NavigationBar bar() =>
+          tester.widget<NavigationBar>(find.byType(NavigationBar));
+      expect(
+        bar().destinations
+            .map((d) => (d as NavigationDestination).label)
+            .toList(),
+        ['Trang chủ', 'Thư viện', 'Khám phá', 'Lịch sử', 'Cá nhân'],
+      );
+      expect(bar().selectedIndex, 0);
+      final hero = find.byKey(const ValueKey('primary-discovery-tab-icon'));
+      expect(
+        tester.getCenter(hero).dx,
+        closeTo(tester.getRect(find.byType(NavigationBar)).center.dx, 1),
+      );
+      await tester.tap(find.text('Khám phá'));
+      await tester.pumpAndSettle();
+      expect(bar().selectedIndex, 2);
+      expect(find.byType(MoodDiscoveryScreen), findsOneWidget);
+      expect(calls.where((x) => x.endsWith('/Movies')), isEmpty);
+      await tester.tap(find.text('Thư viện'));
+      await tester.pumpAndSettle();
+      expect(bar().selectedIndex, 1);
+      expect(find.byType(LibraryScreen), findsOneWidget);
+      expect(calls.where((x) => x.endsWith('/Movies')).length, 1);
+      await tester.tap(find.text('Trang chủ'));
+      await tester.pumpAndSettle();
+      final discover = find.text('Khám phá chi tiết tâm trạng');
+      await tester.ensureVisible(discover);
+      await tester.tap(discover);
+      await tester.pumpAndSettle();
+      expect(bar().selectedIndex, 2);
+      expect(find.byType(MoodDiscoveryScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('chart selects missing days without inventing neutral data', (
     tester,
   ) async {

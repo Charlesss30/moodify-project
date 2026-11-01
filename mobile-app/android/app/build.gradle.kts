@@ -1,10 +1,18 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-if (file("google-services.json").exists()) {
+// The Flutter test runner generates a temporary entrypoint, so use an explicit define.
+val moodifyIntegration = providers.gradleProperty("moodifyIntegration").orNull == "true" ||
+    providers.gradleProperty("dart-defines").orNull.orEmpty().split(",").any {
+        runCatching { String(Base64.getDecoder().decode(it)) }.getOrNull() ==
+            "MOODIFY_INTEGRATION=true"
+    }
+if (!moodifyIntegration && file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
 }
 
@@ -20,7 +28,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.moodify_application"
+        applicationId = if (moodifyIntegration) "com.example.moodify_application.smoke" else "com.example.moodify_application"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

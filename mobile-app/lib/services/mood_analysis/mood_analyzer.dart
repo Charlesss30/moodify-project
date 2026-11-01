@@ -42,6 +42,9 @@ class MoodAnalysisResult {
     this.decisionCandidates = const [],
     this.language,
     this.usesVaModel = false,
+    this.mappingMethod,
+    this.reasonCode,
+    this.expiresAt,
   });
 
   final MoodAnalysisStatus status;
@@ -60,6 +63,9 @@ class MoodAnalysisResult {
   final List<MoodAnalysisCandidate> decisionCandidates;
   final String? language;
   final bool usesVaModel;
+  final String? mappingMethod;
+  final String? reasonCode;
+  final DateTime? expiresAt;
 
   MoodAnalysisResult withMood(Mood mood) => MoodAnalysisResult(
     status: MoodAnalysisStatus.matched,
@@ -73,10 +79,12 @@ class MoodAnalysisResult {
     reason: 'Bạn đã chọn tâm trạng này.',
     analysisId: analysisId,
     mappingVersion: mappingVersion,
+    expiresAt: expiresAt,
     candidates: candidates,
     decisionCandidates: decisionCandidates,
     language: language,
     usesVaModel: usesVaModel,
+    mappingMethod: 'manual_choice',
   );
 
   MoodAnalysisResult withMappedMood(Mood mood) => MoodAnalysisResult(
@@ -92,13 +100,16 @@ class MoodAnalysisResult {
     confidence: confidence,
     analysisId: analysisId,
     mappingVersion: mappingVersion,
+    expiresAt: expiresAt,
     candidates: candidates,
     decisionCandidates: decisionCandidates,
     language: language,
     usesVaModel: usesVaModel,
+    mappingMethod: mappingMethod,
+    reasonCode: reasonCode,
   );
 
-  /// Response from the deployed PhoBERT / RoBERTa VA gateway.
+  /// Shared bilingual response. The backend selects the model and owns its VA.
   factory MoodAnalysisResult.fromVaApi(
     Map<String, dynamic> json, {
     required String expectedLanguage,
@@ -113,31 +124,69 @@ class MoodAnalysisResult {
     }
 
     final language = json['language'];
+    final rawStatus = json['status'];
+    final status = switch (rawStatus) {
+      'matched' => MoodAnalysisStatus.matched,
+      'unknown' => MoodAnalysisStatus.unknown,
+      'unsupported_language' => MoodAnalysisStatus.unsupportedLanguage,
+      _ => invalid(),
+    };
+    if (json['source'] != 'ai_va' ||
+        (expectedLanguage != 'auto' && language != expectedLanguage) ||
+        (status != MoodAnalysisStatus.unsupportedLanguage &&
+            language != 'vi' &&
+            language != 'en') ||
+        json['accepted'] is! bool ||
+        json['requiresConfirmation'] != true) {
+      invalid();
+    }
+    final accepted = json['accepted'] as bool;
     final version = json['modelVersion'];
+    final analysisId = json['analysisId'];
+    final mappingVersion = json['mappingVersion'];
     final mood = json['mood'];
-    if ((expectedLanguage != 'vi' && expectedLanguage != 'en') ||
-        language != expectedLanguage ||
-        json['status'] != 'matched' ||
-        version is! String ||
-        !RegExp(r'^[A-Za-z0-9][A-Za-z0-9_-]{2,79}$').hasMatch(version) ||
-        mood is! Map) {
+    final reasonCode = json['reasonCode'];
+    if (reasonCode != null && reasonCode is! String) invalid();
+    if ((version != null && version is! String) ||
+        (mappingVersion != null && mappingVersion is! String) ||
+        accepted != (status == MoodAnalysisStatus.matched) ||
+        (!accepted && (analysisId != null || mood != null))) {
       invalid();
     }
-    final moodData = Map<String, dynamic>.from(mood);
-    final moodId = moodData['tamTrangID'];
-    final moodName = moodData['tenTamTrang'];
-    if (moodId is! int ||
-        moodId <= 0 ||
-        moodName is! String ||
-        moodName.trim().isEmpty) {
-      invalid();
+    int? moodId;
+    String? moodName;
+    if (accepted) {
+      if (version is! String ||
+          !RegExp(r'^[A-Za-z0-9][A-Za-z0-9_-]{2,79}$').hasMatch(version) ||
+          analysisId is! String ||
+          !RegExp(r'^va_[a-f0-9]{32}$').hasMatch(analysisId) ||
+          mappingVersion is! String ||
+          mappingVersion.isEmpty ||
+          DateTime.tryParse(json['expiresAt']?.toString() ?? '') == null ||
+          mood is! Map) {
+        invalid();
+      }
+      final rawId = mood['tamTrangID'];
+      final rawName = mood['tenTamTrang'];
+      if (rawId is! int ||
+          rawId <= 0 ||
+          rawName is! String ||
+          rawName.trim().isEmpty) {
+        invalid();
+      }
+      moodId = rawId;
+      moodName = rawName;
     }
-    final valence = coordinate(json['valence']);
-    final arousal = coordinate(json['arousal']);
+    final valence = json['valence'] == null
+        ? null
+        : coordinate(json['valence']);
+    final arousal = json['arousal'] == null
+        ? null
+        : coordinate(json['arousal']);
+    if (accepted && (valence == null || arousal == null)) invalid();
     double? confidence;
-    var accepted = true;
     final candidates = <MoodAnalysisCandidate>[];
-    if (language == 'vi') {
+    if (language == 'vi' && version != null) {
       const labels = {
         'Anger',
         'Disgust',
@@ -148,21 +197,20 @@ class MoodAnalysisResult {
         'Surprise',
       };
       final rawConfidence = json['confidence'];
-      final rawAccepted = json['accepted'];
       final rawCandidates = json['emotionCandidates'];
-      if (!labels.contains(json['emotion']) ||
+      if (json['modelType'] != 'emotion_classification_va_adapter' ||
+          json['scoreType'] != 'softmax_not_accuracy' ||
+          !labels.contains(json['emotion']) ||
           rawConfidence is! num ||
           !rawConfidence.isFinite ||
           rawConfidence < 0 ||
           rawConfidence > 1 ||
-          rawAccepted is! bool ||
           rawCandidates is! List ||
           rawCandidates.isEmpty ||
           rawCandidates.length > 3) {
         invalid();
       }
       confidence = rawConfidence.toDouble();
-      accepted = rawAccepted;
       for (final candidate in rawCandidates) {
         if (candidate is! Map) invalid();
         final label = candidate['label'];
@@ -180,27 +228,58 @@ class MoodAnalysisResult {
         );
       }
       if (candidates.map((item) => item.label).toSet().length !=
-          candidates.length) {
+              candidates.length ||
+          candidates.first.label != json['emotion'] ||
+          candidates.first.score != confidence) {
         invalid();
       }
+    } else if (language == 'en' &&
+        version != null &&
+        (json['modelType'] != 'valence_arousal_regression' ||
+            json['scoreType'] != 'regression_coordinates' ||
+            json['confidence'] != null)) {
+      invalid();
     }
     return MoodAnalysisResult(
-      status: accepted
-          ? MoodAnalysisStatus.matched
-          : MoodAnalysisStatus.unknown,
-      moodId: accepted ? moodId : null,
-      label: accepted ? moodName : 'Chưa đủ tin cậy',
+      status: status,
+      moodId: moodId,
+      label:
+          moodName ??
+          (status == MoodAnalysisStatus.unsupportedLanguage
+              ? 'Chưa hỗ trợ ngôn ngữ này'
+              : switch (json['reasonCode']) {
+                  'mixed_emotions' => 'Bạn đang có nhiều cảm xúc',
+                  'model_context_conflict' ||
+                  'negation_model_conflict' ||
+                  'ambiguous_negation' ||
+                  'ambiguous_statement' ||
+                  'uncertain_statement' ||
+                  'not_current_self_description' =>
+                    'Cần làm rõ cảm xúc hiện tại',
+                  'unsupported_emotion' ||
+                  'mood_not_available' => 'Chưa có tâm trạng phù hợp',
+                  _ => 'Chưa đủ tin cậy',
+                }),
       source: MoodAnalysisSource.ai,
-      analyzerVersion: version,
-      language: language,
+      reasonCode: reasonCode as String?,
+      analyzerVersion: version is String ? version : 'unknown',
+      language: language is String ? language : null,
       usesVaModel: true,
+      mappingMethod: json['mappingMethod'] is String
+          ? json['mappingMethod'] as String
+          : null,
       valence: valence,
       arousal: arousal,
       confidence: confidence,
+      analysisId: analysisId as String?,
+      mappingVersion: mappingVersion as String?,
+      expiresAt: accepted
+          ? DateTime.parse(json['expiresAt'] as String).toUtc()
+          : null,
       needsConfirmation: true,
-      reason: accepted
-          ? 'Đây là tâm trạng được gợi ý. Bạn có thể xác nhận hoặc chọn lại.'
-          : 'Mô tả chưa đạt ngưỡng tin cậy. Hãy diễn đạt rõ hơn hoặc chọn tâm trạng bên dưới.',
+      reason: json['message'] is String
+          ? json['message'] as String
+          : 'Hãy xác nhận tâm trạng hoặc chọn lại trước khi nhận gợi ý.',
       candidates: List.unmodifiable(candidates),
     );
   }
