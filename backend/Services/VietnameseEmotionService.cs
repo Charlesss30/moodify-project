@@ -13,12 +13,15 @@ public sealed record VietnameseCatalog(IReadOnlyList<VietnameseCandidate> Items,
 public sealed record VietnameseRuntime(string Status, bool Ready, string? ModelVersion, string? Language, string? InferenceDevice);
 public sealed record VietnameseActivation(int StatusCode, string? Message, string? ActiveVersion, string? Device);
 public sealed record VietnameseEmotionCandidate(string Label, double Score);
-public sealed record VietnamesePrediction(string ModelVersion, string Emotion, double Confidence, bool Accepted,
+public sealed record VietnamesePrediction(string ModelVersion, string Emotion, double Confidence, bool? Accepted,
     IReadOnlyList<VietnameseEmotionCandidate> EmotionCandidates,
     double Valence, double Arousal, int MoodId, string MoodName, decimal MoodValence, decimal MoodArousal);
 
 public sealed class VietnameseEmotionService(IHttpClientFactory clients, MongoStore db)
 {
+    private static readonly HashSet<string> ExpectedEmotionLabels = new(StringComparer.Ordinal)
+        { "Sadness", "Enjoyment", "Love", "Anger", "Fear", "Surprise" };
+
     public async Task<VietnameseRuntime> RuntimeStatusAsync(CancellationToken ct)
     {
         try
@@ -67,12 +70,16 @@ public sealed class VietnameseEmotionService(IHttpClientFactory clients, MongoSt
             if (!response.IsSuccessStatusCode) return null;
             var prediction = await response.Content.ReadFromJsonAsync<ViPrediction>(cancellationToken: ct);
             if (prediction is null || string.IsNullOrWhiteSpace(prediction.ModelVersion)
+                || !ExpectedEmotionLabels.Contains(prediction.Emotion)
                 || prediction.Language != "vi" || !double.IsFinite(prediction.Valence) || prediction.Valence is < -1 or > 1
                 || !double.IsFinite(prediction.Arousal) || prediction.Arousal is < -1 or > 1
                 || !double.IsFinite(prediction.Confidence) || prediction.Confidence is < 0 or > 1
                 || prediction.EmotionCandidates.Count is < 1 or > 3
                 || prediction.EmotionCandidates.Any(item => string.IsNullOrWhiteSpace(item.Label)
-                    || !double.IsFinite(item.Score) || item.Score is < 0 or > 1)) return null;
+                    || !ExpectedEmotionLabels.Contains(item.Label)
+                    || !double.IsFinite(item.Score) || item.Score is < 0 or > 1)
+                || prediction.EmotionCandidates.Select(item => item.Label).Distinct(StringComparer.Ordinal).Count()
+                    != prediction.EmotionCandidates.Count) return null;
 
             var moods = await db.TamTrangs.ToListAsync(ct);
             if (moods.Count == 0) return null;
@@ -118,7 +125,7 @@ public sealed class VietnameseEmotionService(IHttpClientFactory clients, MongoSt
         [JsonPropertyName("language")] public string? Language { get; init; }
         [JsonPropertyName("emotion")] public string Emotion { get; init; } = "";
         [JsonPropertyName("confidence")] public double Confidence { get; init; }
-        [JsonPropertyName("accepted")] public bool Accepted { get; init; }
+        [JsonPropertyName("accepted")] public bool? Accepted { get; init; }
         [JsonPropertyName("emotion_candidates")] public List<VietnameseEmotionCandidate> EmotionCandidates { get; init; } = [];
         [JsonPropertyName("valence")] public double Valence { get; init; }
         [JsonPropertyName("arousal")] public double Arousal { get; init; }

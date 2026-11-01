@@ -1,4 +1,4 @@
-﻿import { request } from './api.js'
+import { request } from './api.js'
 export function bindTmdb(form) {
   const button=form?.querySelector('[data-tmdb]')
   if(!button)return
@@ -12,6 +12,9 @@ export function bindTmdb(form) {
     const data=await request('/Tmdb/lookup?'+new URLSearchParams({query:id}))
     if(!valid(g))return
     for(const name of ['title','poster','description','rating','imdbId','tmdbId','director','trailerUrl','ratingSource'])form.elements[name].value=data[name]??''
+    form.elements.releaseYear.value=data.year??''
+    form.elements.runtimeMinutes.value=data.runtimeMinutes??''
+    form.elements.cast.value=(data.cast||[]).join(', ')
     form.elements.metadataSource.value='TMDB'
     const genre=form.elements.genre
     if(data.genre && ![...genre.options].some(o=>o.value===data.genre))genre.add(new Option(data.genre,data.genre))

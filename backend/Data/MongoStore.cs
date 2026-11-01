@@ -49,6 +49,10 @@ public sealed class MongoStore
                 new BsonDocument(field,1),new CreateIndexOptions{Unique=true}));
         await Collection<Nhac>().Indexes.CreateOneAsync(new CreateIndexModel<Nhac>(
             new BsonDocument{{"source",1},{"externalId",1}},new CreateIndexOptions<Nhac>{Unique=true,PartialFilterExpression=new BsonDocument("externalId",new BsonDocument("$type","string"))}));
+        await Collection<TaiKhoan>().Indexes.CreateOneAsync(new CreateIndexModel<TaiKhoan>(
+            new BsonDocument("googleUid",1),new CreateIndexOptions<TaiKhoan> {
+                Unique=true,PartialFilterExpression=new BsonDocument("googleUid",new BsonDocument("$type","string"))
+            }));
         await Collection<Phim>().Indexes.CreateOneAsync(new CreateIndexModel<Phim>(new BsonDocument("genreIds",1)));
         await Collection<Nhac>().Indexes.CreateOneAsync(new CreateIndexModel<Nhac>(new BsonDocument("genreId",1)));
         await Collection<LichSuTamTrang>().Indexes.CreateOneAsync(new CreateIndexModel<LichSuTamTrang>(new BsonDocument{{"accountId",1},{"createdAt",-1}}));

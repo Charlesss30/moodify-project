@@ -724,7 +724,7 @@ if (moodLanguage) {
         if (input) input.placeholder = isVietnamese ? "Hãy mô tả cảm xúc của bạn bằng tiếng Việt..." : "Describe how you're feeling in English...";
         if (note) note.textContent = isVietnamese
             ? "PhoBERT hiển thị 3 nhãn cảm xúc hàng đầu; gợi ý dùng tọa độ VA tổng hợp từ phân bố lớp."
-            : "RoBERTa estimates valence/arousal; the page also shows the three closest moods.";
+            : "RoBERTa classifies emotion; valence/arousal is derived from the class anchors.";
     });
 }
 
@@ -770,7 +770,7 @@ if (analyzeButton) {
 
             analyzeButton.disabled = true;
             analyzeButton.textContent = "Analyzing…";
-            result.textContent = language === "vi" ? "Đang phân tích bằng PhoBERT tiếng Việt…" : "Analyzing your mood with RoBERTa VA…";
+            result.textContent = language === "vi" ? "Đang phân tích bằng PhoBERT tiếng Việt…" : "Analyzing your mood with RoBERTa emotion classification…";
             result.classList.remove("hidden");
 
             try {
@@ -790,23 +790,34 @@ if (analyzeButton) {
                 summary.textContent = `${language === "vi" ? "Mood ứng dụng gần nhất" : "Nearest app mood"}: ${data.mood.tenTamTrang} · Valence ${Number(data.valence).toFixed(2)} · Arousal ${Number(data.arousal).toFixed(2)}`;
                 result.append(summary);
 
-                const alternatives = language === "vi"
-                    ? (data.emotionCandidates || []).map(item => `${item.label} (${Math.round(Number(item.score) * 100)}%)`)
+                if (data.emotion) {
+                    const emotionLine = document.createElement("p");
+                    emotionLine.textContent = `Cảm xúc: ${data.emotion} · Confidence ${Math.round(Number(data.confidence) * 100)}%`;
+                    result.append(emotionLine);
+                }
+
+                const alternatives = data.emotionCandidates?.length
+                    ? data.emotionCandidates.map(item => `${item.label} (${Math.round(Number(item.score) * 100)}%)`)
                     : (data.moodCandidates || []).filter(item => Number(item.moodId ?? item.MoodId) !== Number(data.mood.tamTrangID))
                         .map(item => item.moodName ?? item.MoodName).filter(Boolean);
                 if (alternatives.length) {
                     const candidateLine = document.createElement("p");
-                    candidateLine.textContent = language === "vi"
-                        ? `Các nhãn PhoBERT hàng đầu: ${alternatives.join(" · ")}`
+                    candidateLine.textContent = data.emotionCandidates?.length
+                        ? `Các nhãn cảm xúc hàng đầu: ${alternatives.join(" · ")}`
                         : `Các mood gần tọa độ VA: ${alternatives.join(" · ")}`;
                     result.append(candidateLine);
                 }
 
-                if (language === "vi" && data.accepted === false) {
+                if (data.accepted === false) {
                     const uncertainty = document.createElement("p");
                     uncertainty.textContent = "Độ tin cậy dưới ngưỡng kiểm định; hãy diễn đạt rõ hơn rồi thử lại trước khi dùng gợi ý này.";
                     result.append(uncertainty);
                     return;
+                }
+                if (data.emotion && data.accepted == null) {
+                    const review = document.createElement("p");
+                    review.textContent = "Model chưa có ngưỡng confidence đã hiệu chỉnh; hãy kiểm tra và xác nhận tâm trạng trước khi dùng gợi ý.";
+                    result.append(review);
                 }
 
                 const recommend = document.createElement("button");

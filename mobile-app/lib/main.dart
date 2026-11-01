@@ -1,8 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-import 'core/colors.dart';
+import 'core/app_theme.dart';
+import 'widgets/app_startup.dart';
+import 'core/navigation.dart';
+import 'services/auth/firebase_bootstrap.dart';
+import 'services/auth/google_auth_service.dart';
+import 'services/notifications/push_notifications.dart';
+import 'screens/mood_discovery_screen.dart';
+import 'screens/statistics_screen.dart';
 import 'core/api_service.dart';
 import 'models/session_user.dart';
 import 'screens/login_screen.dart';
@@ -10,7 +18,17 @@ import 'screens/register_screen.dart';
 import 'screens/app_shell.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MoodifyApp());
+}
+
+Future<void> _initializeServices() async {
+  await FirebaseBootstrap.initialize();
+  try {
+    await PushNotifications.initialize();
+  } catch (_) {
+    // Optional notifications do not prevent starting the app.
+  }
 }
 
 class MoodifyApp extends StatelessWidget {
@@ -20,17 +38,17 @@ class MoodifyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Moodify',
+      navigatorObservers: [appRouteObserver],
+      navigatorKey: appNavigatorKey,
       locale: const Locale('vi', 'VN'),
       supportedLocales: const [Locale('vi', 'VN'), Locale('en')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: AppColors.background,
-        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
-        useMaterial3: true,
+      theme: AppTheme.dark,
+      home: AppStartup(
+        initialize: _initializeServices,
+        child: const AppFlowCoordinator(),
       ),
-      home: const AppFlowCoordinator(),
     );
   }
 }
@@ -51,10 +69,53 @@ class _AppFlowCoordinatorState extends State<AppFlowCoordinator> {
   void initState() {
     super.initState();
     ApiService.onUnauthorized = _expireSession;
+    PushNotifications.onOpen = _openNotification;
+    PushNotifications.onForeground = (title, body, screen) {
+      if (!mounted || _currentView != 'home') return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$title: $body'),
+          action: SnackBarAction(
+            label: 'Mở',
+            onPressed: () => _openNotification(screen),
+          ),
+        ),
+      );
+    };
+  }
+
+  void _openNotification(String screen) {
+    if (!mounted || _currentView != 'home') {
+      PushNotifications.pendingScreen = screen;
+      return;
+    }
+    appNavigatorKey.currentState?.push(
+      MaterialPageRoute<void>(
+        builder: (_) => screen == 'statistics'
+            ? const StatisticsScreen()
+            : const MoodDiscoveryScreen(),
+      ),
+    );
+  }
+
+  void _loggedIn(SessionUser user) {
+    setState(() {
+      _currentUserSession = user;
+      _currentView = 'home';
+    });
+    unawaited(PushNotifications.startSession());
+    final pending = PushNotifications.pendingScreen;
+    PushNotifications.pendingScreen = null;
+    if (pending != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _openNotification(pending),
+      );
+    }
   }
 
   void _expireSession() {
     if (!mounted) return;
+    unawaited(PushNotifications.endSession());
     Navigator.of(
       context,
       rootNavigator: true,
@@ -66,7 +127,9 @@ class _AppFlowCoordinatorState extends State<AppFlowCoordinator> {
     });
   }
 
-  void _logout() {
+  Future<void> _logout() async {
+    await PushNotifications.endSession();
+    await GoogleAuthService.signOut();
     ApiService.logout();
     if (!mounted) return;
     Navigator.of(
@@ -109,12 +172,7 @@ class _AppFlowCoordinatorState extends State<AppFlowCoordinator> {
         // Tiền điều kiện mặc định
         return LoginScreen(
           // UC02 - Dòng 6: Xác thực thành công -> Lưu session -> Vào trang chủ
-          onLoginSuccess: (user) {
-            setState(() {
-              _currentUserSession = user;
-              _currentView = 'home';
-            });
-          },
+          onLoginSuccess: _loggedIn,
           // UC01 - Dòng 1: Chọn chức năng đăng ký
           onNavigateToRegister: () {
             setState(() => _currentView = 'register');
@@ -126,6 +184,8 @@ class _AppFlowCoordinatorState extends State<AppFlowCoordinator> {
   @override
   void dispose() {
     ApiService.onUnauthorized = null;
+    PushNotifications.onOpen = null;
+    PushNotifications.onForeground = null;
     super.dispose();
   }
 }

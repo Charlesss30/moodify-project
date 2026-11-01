@@ -17,9 +17,14 @@ namespace mood_recommendation.DTOs
 
         [StringLength(2048)] public string? TrailerUrl { get; set; }
         public IEnumerable<ValidationResult> Validate(ValidationContext context) {
+            if (Cast is not null && Cast.Any(name => string.IsNullOrWhiteSpace(name) || name.Length > 120))
+                yield return new ValidationResult("Cast names must contain 1–120 characters.", new[] { nameof(Cast) });
             if (!string.IsNullOrWhiteSpace(TrailerUrl) && !mood_recommendation.Services.TrailerLookup.ValidUrl(TrailerUrl))
                 yield return new ValidationResult("Use a valid HTTPS YouTube video URL.", new[] { nameof(TrailerUrl) });
         }
+        [Range(1800, 2100)] public int? ReleaseYear { get; set; }
+        [Range(1, 1000)] public int? RuntimeMinutes { get; set; }
+        [MaxLength(30)] public string[]? Cast { get; set; }
         public string? MoTa { get; set; }
         [RegularExpression(@"^[1-9][0-9]{0,8}$")] public string? TMDBID { get; set; }
         [RegularExpression("^(TMDB|IMDb|Manual|Legacy)$")] public string? RatingSource { get; set; }

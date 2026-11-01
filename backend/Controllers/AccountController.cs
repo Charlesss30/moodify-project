@@ -1,4 +1,4 @@
-﻿using System.Net.Mail;
+using System.Net.Mail;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,7 +11,7 @@ namespace mood_recommendation.Controllers;
 public sealed class AccountController(MongoStore db) : ControllerBase
 {
  int AccountId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
- [HttpGet("profile")] public async Task<IActionResult> Profile() { var u=await db.Find<TaiKhoan>(AccountId); return u is null?NotFound():Ok(new {u.TaiKhoanID,u.TenDangNhap,u.Email,u.PreferredContentType,u.MoodGoal,u.AvatarDataUrl}); }
+ [HttpGet("profile")] public async Task<IActionResult> Profile() { var u=await db.Find<TaiKhoan>(AccountId); return u is null?NotFound():Ok(new {u.TaiKhoanID,u.TenDangNhap,u.Email,u.HasPassword,u.PreferredContentType,u.MoodGoal,u.AvatarDataUrl}); }
  [HttpPut("profile")] public async Task<IActionResult> UpdateProfile(UpdateAccountProfileDto dto) {
   var name=dto.TenDangNhap?.Trim()??""; var email=dto.Email?.Trim()??"";
   if(name.Length is <2 or >100)return BadRequest(new{message="Tên hiển thị cần từ 2 đến 100 ký tự."});
@@ -22,7 +22,7 @@ public sealed class AccountController(MongoStore db) : ControllerBase
   var ne=MongoStore.Normalize(email);var nn=MongoStore.Normalize(name);
   if(await db.TaiKhoans.AnyAsync(x=>x.TaiKhoanID!=u.TaiKhoanID&&(x.EmailNormalized==ne||x.TenDangNhapNormalized==nn)))return Conflict(new{message="Tên đăng nhập hoặc email đã được sử dụng."});
   u.TenDangNhap=name;u.Email=email;if(dto.AvatarDataUrl is not null)u.AvatarDataUrl=dto.AvatarDataUrl;await db.Update(u);
-  return Ok(new{u.TaiKhoanID,u.TenDangNhap,u.Email,u.PreferredContentType,u.MoodGoal,u.AvatarDataUrl});
+  return Ok(new{u.TaiKhoanID,u.TenDangNhap,u.Email,u.HasPassword,u.PreferredContentType,u.MoodGoal,u.AvatarDataUrl});
  }
  [HttpPut("preferences")] public async Task<IActionResult> UpdatePreferences(UpdateAccountPreferencesDto dto) {
   if(dto.PreferredContentType is not ("Both" or "Music" or "Movie"))return BadRequest(new{message="Lựa chọn nội dung không hợp lệ."});

@@ -12,6 +12,7 @@ public sealed class TokenService(string key)
         new JwtSecurityToken(Issuer, Audience,
             [new Claim(ClaimTypes.NameIdentifier, user.TaiKhoanID.ToString()),
              new Claim(ClaimTypes.Role, AdminRoles.IsAdmin(user.VaiTro) ? AdminRoles.Name : user.VaiTro),
+             new Claim("sv", user.SessionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)),
              new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())],
             expires: expiresAt,
             signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)), SecurityAlgorithms.HmacSha256)));

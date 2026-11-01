@@ -1,5 +1,8 @@
 # Moodify AI integration — implementation and acceptance status
 
+
+> **Cập nhật 01/11/2026:** Khám phá gọi API `/api/MoodAnalysis/valence-arousal`, định tuyến tiếng Việt → PhoBERT sáu lớp, tiếng Anh → RoBERTa-base sáu lớp; V/A được tính từ emotion anchors. Kết quả có emotion/confidence/candidates, V/A, model version và cần người dùng xác nhận khi `accepted` chưa được hiệu chỉnh. Mô tả regression VA ở bản ghi ngày 25/10 là lịch sử. Chi tiết và giới hạn xác minh: [AI_MODEL_TEST_CASES.md](AI_MODEL_TEST_CASES.md).
+
 > Tài liệu lưu bằng chứng theo thời điểm, không mô tả trạng thái runtime hiện tại. Cách chạy mới nhất ở [README](../README.md); chức năng và giới hạn tổng hợp ở [báo cáo tuần 7–8](BAO_CAO_TUAN_7_8.md).
 
 Updated: 2026-10-07. This status distinguishes real model evidence, fixture-backed integration tests, and work still blocked. Full acceptance is **not** claimed.
@@ -126,3 +129,8 @@ The superseded audit/fix logs were removed on 10/10/2026. Their maintenance-rele
 - Historical regression evidence: 320 backend assertions, 23 Flutter tests, real CUDA changed-filter/renamed-mood checks, gateway/history and unavailable-service fallback on temporary databases. These counts describe that run, not a fresh test on 10/10/2026. Later feature/role checks are recorded in the week 7–8 report.
 - Offline model metrics are not per-request accuracy. Content coverage does not prove VA label quality, and pending content must not be automatically marked reviewed merely to improve coverage.
 - Independent domain quality, Vietnamese AI, content VA suitability and rollback to a distinct model artifact remain unproven. Keep runtime readiness separate from persisted registry activation.
+## 2026-11-01 — classifier song ngữ 6 lớp
+
+Đã thêm candidate RoBERTa-base tiếng Anh và PhoBERT tiếng Việt, với V/A suy từ anchors. Kết quả đã ghi từ lần train: EN dair-ai/emotion test 93,25% accuracy / 90,17% macro-F1; VI test dịch máy 85,70% / 81,08%; VI UIT-VSMEC test 79,40% / 64,18%. Chỉ số tiếng Việt thật dưới mục tiêu 85%; cần domain test Moodify mới trước khi tuyên bố chất lượng cho input app. Confidence threshold chưa được cung cấp/hiệu chỉnh, nên response `accepted` để null và client xin xác nhận.
+
+Thêmendum này không thay lịch sử snapshot ở trên. Xem [AI_MODEL_TEST_CASES.md](AI_MODEL_TEST_CASES.md) và [ai-service README](../ai-service/README.md).

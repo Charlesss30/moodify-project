@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../core/colors.dart';
+import 'moodify_mark.dart';
 import 'app_widgets.dart';
 
 class AuthFrame extends StatelessWidget {
@@ -44,24 +44,7 @@ class AuthFrame extends StatelessWidget {
                     EntryFade(
                       child: Column(
                         children: [
-                          Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [
-                                  AppColors.accentPrimary,
-                                  AppColors.accentSecondary,
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(19),
-                            ),
-                            child: const Icon(
-                              Icons.graphic_eq_rounded,
-                              color: Colors.white,
-                              size: 32,
-                            ),
-                          ),
+                          const MoodifyMark(),
                           const SizedBox(height: 16),
                           Text(
                             'MOODIFY',

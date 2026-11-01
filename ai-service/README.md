@@ -1,89 +1,77 @@
 # Moodify AI inference service
 
-This service can load the local emotion-classification model and the separate
-EmoBank RoBERTa valence/arousal (VA) checkpoint. It never sends text to a third
-party. The VA model accepts English only and is enabled with
-`VA_MODEL_ENABLED=true`. Model artifacts remain outside this source folder.
+Python/FastAPI serves local model artifacts only. The two current bilingual models are six-class emotion classifiers; the service converts class probabilities to valence/arousal (V/A) using each artifact's `label_config.json` anchors. V/A is therefore anchor-derived, not a learned regression output.
 
-The default `MODEL_DIR` resolves to the local `best_model` folder, which is
-excluded from Git and must be supplied separately. Set
-`MODEL_DIR` to an absolute path when deploying elsewhere and set
-`MODEL_SHA256` to the SHA-256 of `model.safetensors`. The service checks the
-checksum, 28-label order, multi-label classifier configuration, and 128-token
-limit before reporting readiness. Do not expose it publicly; bind to loopback.
+## Current six-class candidates
 
-From the `ai-service` directory, create a dedicated virtual environment,
-install these requirements, and run one process after verifying sufficient
-free memory:
+| Language | Model | Length | Candidate version | Test result recorded at training |
+|---|---|---:|---|---|
+| English | `roberta-base` | 64 tokens | `roberta_base_moodify_6c_20261101_051915` | `dair-ai/emotion` official test, n=2,000: accuracy 93.25%, macro-F1 90.17% (in-distribution) |
+| Vietnamese | `vinai/phobert-base-v2` | 96 tokens | `phobert_moodify_6c_20261101_053022` | translated test n=2,000: accuracy 85.70%, macro-F1 81.08%; UIT-VSMEC 5-class test n=432: accuracy 79.40%, macro-F1 64.18% |
 
-```powershell
-py -3.14 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-pip install -r requirements-gpu.txt
-$python = ".\.venv\Scripts\python.exe"
-& $python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
-$env:AI_MODEL_ENABLED = "true"
-$env:MODEL_SHA256 = "EA865317D9EB7CF1B39008062276BAE441801A7D719D33177A3DDD1851AF7B09"
-& $python -m uvicorn main:app --host 127.0.0.1 --port 8001 --workers 1
+The Vietnamese result on real Vietnamese text is below the 85% target. The translated test is not a measure of real Vietnamese quality. The English test is from the same dataset distribution as training and does not establish Moodify-domain quality. Both outputs were trained with six labels: `Sadness`, `Enjoyment`, `Love`, `Anger`, `Fear`, `Surprise`.
+
+Artifacts live under the gitignored `code-train/train-KLCN/output/` tree:
+
+```text
+output/roberta_base_moodify_6c_20261101_051915/
+  best_model/       # config, model.safetensors, tokenizer
+  label_config.json # ordered labels, V/A anchors and training evaluation
+  manifest.json     # base model, dataset notes, SHA-256, split and license status
+  test_report.json  # recorded test metrics, not recomputed by the service
+  training_metrics.json
+  training_log.txt
+output/vietnamese-emotion/phobert_moodify_6c_20261101_053022/
+  model/            # config, model.safetensors, PhoBERT tokenizer files
+  label_config.json
+  preprocessing.json # emoji and curated teencode maps from the training notebook
+  manifest.json
+  test_report.json
+  training_metrics.json
+  training_log.txt
 ```
 
-The CUDA wheel is optional and was verified with Python 3.14, CUDA 12.8, and
-an NVIDIA RTX 3050 Laptop GPU (4 GB). It is large (about 2.8 GB). The predictor
-automatically selects CUDA when `torch.cuda.is_available()` is true and falls
-back to CPU otherwise. Keep the service bound to loopback and confirm enough
-free VRAM before enabling it. Do not install the CUDA wheel into the global
-Python environment.
+`manifest.json` SHA-256 is checked when the predictor loads. Do not replace weights in place; create a new version directory so the previous candidate remains available. Verify dataset, base-model and translation-model terms before redistribution. Raw user descriptions, credentials, and tokens must not enter logs or training bundles.
 
-`GET /health/live` reports process liveness. `GET /health/ready` reports 503
-until the model has loaded and passed artifact checks; when ready it reports
-`inference_device` and `device_name` so CUDA use is observable. The predictor
-places both the model and tokenized inputs on CUDA when available and otherwise
-uses CPU. `POST /predict` accepts
-`{"text":"...","language":"en"}`. Whitespace, 1–4000 character bounds, and
-128-token bounds are validated; long input is rejected, never silently cut.
-Concurrent inference beyond the single active slot returns 429.
+## Start
 
-## Valence/arousal regression model
+With the project runner, the new English candidate is the default English model. Vietnamese candidates are listed but need an explicit activation; no active marker is overwritten by installing the candidate.
 
-The checkpoint is expected at
-`code-train/train-KLCN/output/roberta_va_regression/roberta_va_regression.pt`
-with its tokenizer at `.../tokenizer/tokenizer.json`. The adapter recreates
-`RobertaModel(roberta-base) + CLS + Dropout(0.3) + Linear(768, 2)` from
-`emobank.ipynb`, loads the `state_dict` with `weights_only` mode, and uses the
-same 128-token input length. Outputs are clamped to the training target range
-`[-1, 1]`.
+```powershell
+./Start.ps1
+```
 
-The local runner enables VA automatically when the checkpoint and tokenizer
-are present. For a manual service start, set:
+The runner expects the Python environment at `ai-service/.venv` and binds inference to loopback port 8001. It uses `VA_MODEL_VERSION` for the English candidate. Set `VI_ACTIVE_MODEL_FILE` to a marker created by the AIEngineer model activation flow to serve a Vietnamese candidate.
+
+Manual service start from `ai-service/`:
 
 ```powershell
 $env:VA_MODEL_ENABLED = "true"
-$env:VA_MODEL_DIR = (Resolve-Path "..\code-train\train-KLCN\output\roberta_va_regression").Path
-$env:VA_CHECKPOINT = Join-Path $env:VA_MODEL_DIR "roberta_va_regression.pt"
-$env:VA_TOKENIZER_DIR = Join-Path $env:VA_MODEL_DIR "tokenizer"
+$env:VA_MODELS_ROOT = (Resolve-Path "../code-train/train-KLCN/output").Path
+$env:VA_MODEL_VERSION = "roberta_base_moodify_6c_20261101_051915"
+$env:VA_ACTIVE_MODEL_FILE = Join-Path $env:LOCALAPPDATA "Moodify/va-active-model.txt"
+$env:VI_MODEL_ENABLED = "true"
+$env:VI_MODELS_ROOT = (Resolve-Path "../code-train/train-KLCN/output/vietnamese-emotion").Path
+$env:VI_ACTIVE_MODEL_FILE = Join-Path $env:LOCALAPPDATA "Moodify/vi-active-model.txt"
+$python = ".\.venv\Scripts\python.exe"
+& $python -m uvicorn main:app --host 127.0.0.1 --port 8001 --workers 1
 ```
 
-`GET /health/va/ready` checks this model; `POST /predict-va` returns its VA
-coordinates. The authenticated backend endpoint
-`POST /api/MoodAnalysis/valence-arousal` finds the nearest configured mood.
-The web page then sends the predicted coordinates and mood ID to the existing
-recommendation endpoint so content ranking uses the model output. This model
-has a separate lifecycle from the 28-label model registry. No independent
-quality validation is claimed for this checkpoint.
+Activate the Vietnamese candidate from the AIEngineer model workspace or, on the loopback-only service, after startup:
 
-The dependency file retains the exported deployment's supported ranges and
-Transformers version; it is not a post-smoke lockfile. Controlled local service
-benchmarks on 2026-10-06 used the same 30 sequential English inputs:
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/models/vi/activate `
+  -ContentType 'application/json' -Body '{"version":"phobert_moodify_6c_20261101_053022"}'
+```
 
-- CPU (`torch 2.11.0+cpu`): p50 70.7 ms, p95 82.0 ms, peak server RSS
-  1,623.6 MiB.
-- RTX 3050 Laptop GPU (`torch 2.11.0+cu128`): p50 17.9 ms, p95 22.7 ms,
-  peak server RSS 2,215.5 MiB; about 1.5 GiB of VRAM was occupied by the
-  loaded model. GPU warm-up was 267.6 ms.
+The new English classifier is available through the legacy-compatible `POST /predict-va` route. Vietnamese remains `POST /predict-vi`. Both accept `{"text":"...","language":"en|vi"}` and return `model_version`, `language`, `emotion`, `confidence`, `accepted`, top emotion candidates, class probabilities, V/A and coordinate range. V/A stays in [-1,1]. Inputs are limited to 1–4000 characters; English truncates to 64 model tokens and Vietnamese to 96, matching the notebook max lengths.
 
-All 30 responses on each run met the 28 finite-score contract. Whitespace,
-unsupported-language, and 129-token requests returned HTTP 422 on the GPU
-service. These are small local latency/contract tests, not model-quality
-evidence or production-readiness claims. Gateway/app end-to-end and mobile
-device performance were not tested. The temporary service was stopped.
+The notebook outputs do not contain calibrated confidence thresholds. Until calibration is performed, `accepted` is `null`, not a fabricated true/false. Clients must ask the user to review and confirm the suggested mood. Optional `EN_CONFIDENCE_THRESHOLD` and `VI_CONFIDENCE_THRESHOLD` environment variables are accepted only as explicit deployment configuration after calibration; they are intentionally unset by the runner.
+
+Readiness endpoints are `/health/va/ready` and `/health/vi/ready`; candidate lists and activate routes are `/models/va` and `/models/vi`. Model activation loads the candidate, runs a smoke inference, then writes the active marker atomically. The inference model lifecycle is separate from the 28-label legacy classifier (`POST /predict`, `AI_MODEL_ENABLED`, SHA-256 allowlist) and its emotion-mood mapping. That legacy path remains unchanged.
+
+Install runtime requirements in a dedicated virtual environment with `pip install -r requirements.txt`. Vietnamese requires `pyvi`/sentencepiece as declared by the project. CUDA is optional; the predictors use CPU when CUDA is not available. Do not expose port 8001 publicly.
+
+## Evaluation limits
+
+Smoke sentences in the training notebooks are hand-written integration checks, not gold evaluation data. Training reports are read from the supplied output; this repository integration does not rerun training or recompute the test sets. Add a held-out, human-annotated Moodify test set (with agreement reporting) before claiming app-domain accuracy or selecting an `accepted` threshold. The current anchor for `Love` is a design proposal, not a validated psychological measurement.

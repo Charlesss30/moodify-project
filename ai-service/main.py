@@ -41,6 +41,13 @@ def va_candidate(version: str) -> tuple[Path, Path]:
     folder = root / version
     if folder.is_symlink() or not folder.is_dir() or folder.resolve().parent != root:
         raise FileNotFoundError("Model version is not an available local candidate.")
+    classifier = folder / "best_model"
+    if (classifier.is_dir() and not classifier.is_symlink()
+            and (classifier / "config.json").is_file()
+            and (classifier / "model.safetensors").is_file()
+            and (classifier / "tokenizer.json").is_file()
+            and (folder / "label_config.json").is_file()):
+        return classifier, folder
     checkpoint = folder / f"{version}.pt"
     if not checkpoint.is_file() or checkpoint.is_symlink():
         checkpoint = folder / "model.pt"
@@ -48,7 +55,7 @@ def va_candidate(version: str) -> tuple[Path, Path]:
     tokenizer_file = tokenizer / "tokenizer.json"
     if (not checkpoint.is_file() or checkpoint.is_symlink() or tokenizer.is_symlink()
             or not tokenizer_file.is_file() or tokenizer_file.is_symlink()):
-        raise FileNotFoundError("Candidate must contain a PyTorch checkpoint and tokenizer.")
+        raise FileNotFoundError("Candidate must contain either a six-class best_model package or a PyTorch checkpoint and tokenizer.")
     return checkpoint, tokenizer
 
 
@@ -64,8 +71,12 @@ def va_candidates() -> list[dict]:
             checkpoint, tokenizer = va_candidate(folder.name)
         except (ValueError, FileNotFoundError):
             continue
-        candidates.append({"model_version": folder.name, "checkpoint": checkpoint.name,
-                           "tokenizer_available": (tokenizer / "tokenizer.json").is_file()})
+        is_classifier = checkpoint.is_dir()
+        candidates.append({"model_version": folder.name,
+                           "checkpoint": "model.safetensors" if is_classifier else checkpoint.name,
+                           "model_type": "emotion_classifier_6" if is_classifier else "va_regression",
+                           "tokenizer_available": (checkpoint / "tokenizer.json").is_file() if is_classifier
+                           else (tokenizer / "tokenizer.json").is_file()})
     return candidates
 
 
@@ -151,7 +162,7 @@ async def lifespan(app: FastAPI):
         try:
             from va_predictor import ValenceArousalPredictor
 
-            version = active_va_version() or Path(os.environ.get("VA_MODEL_DIR", str(_default_va_dir))).name
+            version = active_va_version() or os.environ.get("VA_MODEL_VERSION", "").strip() or Path(os.environ.get("VA_MODEL_DIR", str(_default_va_dir))).name
             checkpoint, tokenizer_dir = va_candidate(version)
             app.state.va_predictor = ValenceArousalPredictor(checkpoint, tokenizer_dir, version)
             app.state.va_active_version = version
@@ -246,9 +257,8 @@ def list_va_models():
 
 @app.post("/models/va/activate")
 def activate_va_model(request: ActivateVARequest):
-    if app.state.va_predictor is None:
-        raise HTTPException(status_code=503, detail="Valence/arousal runtime is unavailable.")
-    if request.version == app.state.va_active_version:
+    # A newly uploaded candidate can bootstrap an empty VA runtime.
+    if app.state.va_predictor is not None and request.version == app.state.va_active_version:
         return {"status": "ready", "active_version": request.version,
                 "device": app.state.va_predictor.device}
     if not _predict_lock.acquire(blocking=False):
@@ -357,3 +367,6 @@ def predict_vi(request: PredictionRequest):
             raise HTTPException(status_code=422, detail=str(error)) from error
     finally:
         _vi_predict_lock.release()
+
+
+

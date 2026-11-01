@@ -162,3 +162,13 @@ Không xóa hàng loạt Spotify/MovieLens nếu còn định làm hybrid; khôn
 Số liệu model trong báo cáo lấy từ file cục bộ nêu trên, chưa tái chạy. Đối chiếu nền tảng tiếng Anh với [model card RoBERTa-large](https://huggingface.co/FacebookAI/roberta-large); dataset/nhãn với [GoEmotions chính thức](https://github.com/google-research/google-research/tree/master/goemotions); nguồn MovieLens tham khảo [GroupLens](https://grouplens.org/datasets/movielens/latest/). Không suy rằng tất cả CSV cục bộ có nguồn/giấy phép đã được xác minh chỉ từ tên thư mục.
 
 Tích hợp đã có; xem [AI_IMPLEMENTATION.md](AI_IMPLEMENTATION.md), [artifact guide](../code-train/README.md) và [README](../README.md) để vận hành. Các nhận xét chưa triển khai trong báo cáo này là snapshot lúc kiểm kê artifact, không phải trạng thái hiện tại.
+
+## Addendum 2026-11-01 — hai classifier mới
+
+Hai model 6 lớp đã được đưa vào candidate folders dưới gitignored `code-train/train-KLCN/output/`; weights không được thêm vào source control. English `roberta-base` dùng test `dair-ai/emotion` n=2.000: accuracy 93,25%, macro-F1 90,17%. Vietnamese `vinai/phobert-base-v2` dùng test dịch máy n=2.000: 85,70% / 81,08%, và UIT-VSMEC 5 lớp n=432: 79,40% / 64,18%. Kết quả tiếng Việt thật chưa đạt mục tiêu accuracy 85%; không được gộp test dịch với VSMEC hoặc dùng smoke list như accuracy.
+
+Inference mới trả emotion/confidence/candidates và V/A lấy từ 6 class anchors trong `label_config.json`. Hai notebook không xuất calibration threshold, nên `accepted` là null cho đến khi ngưỡng được hiệu chỉnh bằng tập validation/calibration phù hợp. `Love` anchor là đề xuất, chưa kiểm chứng. Candidate Anh được runner chọn làm mặc định nếu không có active marker; candidate Việt được liệt kê nhưng cần activate tường minh. Không có marker nào bị ghi đè khi cài model.
+
+Emotion Mapping backend hiện xác thực chính xác taxonomy 28 nhãn GoEmotions, còn hai model mới không gọi mapping đó mà suy V/A rồi chọn mood gần nhất. Vì vậy không đổi collection mapping hoặc migration DB sang sáu nhãn; làm vậy sẽ phá classifier legacy. Xem [AI_MODEL_TEST_CASES.md](AI_MODEL_TEST_CASES.md), [hướng dẫn service](../ai-service/README.md) và `moodify-ai-flow-and-dataset-guide.md` để biết chi tiết.
+
+Tích hợp source đã được compile Python, JavaScript syntax check và artifact hash/manifest đối chiếu. Chưa xác nhận inference thật vì môi trường Python AI không có torch/transformers; backend build chưa restore được NuGet do DNS/network unavailable; Flutter suite đang chạy/đợi kết quả ở lượt tích hợp.

@@ -11,8 +11,8 @@ $backendDir = Join-Path $root "backend"
 $adminDir = Join-Path $root "admin-web"
 $aiDir = Join-Path $root "ai-service"
 $modelDir = Join-Path $root "code-train\train-KLCN\output\roberta_large_asl_en_01\best_model"
-$vaModelDir = Join-Path $root "code-train\train-KLCN\output\roberta_va_regression"
-$viModelRoot = Join-Path $root "code-train\train-KLCN\output\vietnamese-emotion"
+$vaModelRoot = Join-Path $root "code-train\train-KLCN\output"
+$vaModelVersion = "roberta_base_moodify_6c_20261101_051915"
 $viModelRoot = Join-Path $root "code-train\train-KLCN\output\vietnamese-emotion"
 $modelHash = "EA865317D9EB7CF1B39008062276BAE441801A7D719D33177A3DDD1851AF7B09"
 $apiPort = 5170
@@ -227,7 +227,7 @@ function Show-Status {
         }
     }
     try {
-        $runtime = Invoke-RestMethod -Uri "$($aiUrl)health/ready" -TimeoutSec 3
+        $runtime = Invoke-RestMethod -Uri "$($aiUrl)health/va/ready" -TimeoutSec 3
         Write-Output "Inference: Ready; model=$($runtime.model_version); device=$($runtime.inference_device) ($($runtime.device_name))"
     }
     catch {
@@ -314,20 +314,33 @@ try {
         throw "Port $aiPort is occupied by an unmanaged process. No existing process was stopped."
     }
 
+    # Fail on merge/build errors before allocating memory to model loading.
+    $buildOutput = & dotnet build (Join-Path $backendDir "mood_recommendation.csproj") `
+        --configuration Release 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Backend build failed: $($buildOutput -join ' ')"
+    }
+    $backendDll = Join-Path $backendDir "bin\Release\net10.0\mood_recommendation.dll"
+    if (-not (Test-Path -LiteralPath $backendDll)) {
+        throw "Backend build succeeded but output DLL is missing: $backendDll"
+    }
+
     if (-not $WithoutAI) {
         $python = Join-Path $aiDir ".venv\Scripts\python.exe"
         $artifact = Join-Path $modelDir "model.safetensors"
-        $vaArtifact = Join-Path $vaModelDir "roberta_va_regression.pt"
-        $vaTokenizer = Join-Path $vaModelDir "tokenizer\tokenizer.json"
+        $vaCandidateDir = Join-Path $vaModelRoot $vaModelVersion
+        $vaArtifact = Join-Path $vaCandidateDir "best_model\model.safetensors"
+        $vaTokenizer = Join-Path $vaCandidateDir "best_model\tokenizer.json"
+        $vaLabelConfig = Join-Path $vaCandidateDir "label_config.json"
         $hasEmotionModel = Test-Path -LiteralPath $artifact
-        $hasVaModel = (Test-Path -LiteralPath $vaArtifact) -and (Test-Path -LiteralPath $vaTokenizer)
+        $hasVaModel = (Test-Path -LiteralPath $vaArtifact) -and (Test-Path -LiteralPath $vaTokenizer) -and (Test-Path -LiteralPath $vaLabelConfig)
         if (-not (Test-Path -LiteralPath $python) -or (-not $hasEmotionModel -and -not $hasVaModel)) {
             throw "The AI virtual environment and at least one model artifact are required. See ai-service\README.md."
         }
         $freeRamMiB = [math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1024)
         $minimumRamMiB = if ($hasEmotionModel -and $hasVaModel) { 3500 } elseif ($hasEmotionModel) { 2500 } else { 1800 }
         if ($freeRamMiB -lt $minimumRamMiB) {
-            throw "Only $freeRamMiB MiB physical RAM is free; at least $minimumRamMiB MiB is required for the configured local model(s)."
+            Write-Warning "Only $freeRamMiB MiB physical RAM is free; $minimumRamMiB MiB is recommended for the configured local model(s). Loading may be slow. Close unused apps or use -WithoutAI if necessary; model readiness will still be checked."
         }
         $nvidiaSmi = Get-Command nvidia-smi.exe -ErrorAction SilentlyContinue
         if ($nvidiaSmi) {
@@ -352,10 +365,9 @@ try {
             VA_MODEL_ENABLED = if ($hasVaModel) { "true" } else { "false" }
             MODEL_SHA256 = $modelHash
             MODEL_DIR = $modelDir
-            VA_MODEL_DIR = $vaModelDir
-            VA_CHECKPOINT = $vaArtifact
-            VA_TOKENIZER_DIR = (Join-Path $vaModelDir "tokenizer")
-            VA_MODELS_ROOT = (Join-Path $root "code-train\train-KLCN\output")
+            VA_MODEL_DIR = $vaCandidateDir
+            VA_MODEL_VERSION = $vaModelVersion
+            VA_MODELS_ROOT = $vaModelRoot
             VA_ACTIVE_MODEL_FILE = (Join-Path $stateDir "va-active-model.txt")
             VI_MODEL_ENABLED = "true"
             VI_MODELS_ROOT = $viModelRoot
@@ -366,36 +378,32 @@ try {
             -WorkingDirectory $aiDir -Port $aiPort -CommandMatch "uvicorn main:app" `
             -Environment $inferenceEnvironment
         if ($hasEmotionModel) {
-            $runtime = Invoke-Readiness "$($aiUrl)health/ready" 240 "roberta_large_asl_en_01"
+        $runtime = Invoke-Readiness "$($aiUrl)health/va/ready" 240 $vaModelVersion
             if ($runtime.artifact_hash -ne $modelHash.ToLowerInvariant()) {
                 throw "Inference readiness returned an unexpected artifact checksum."
             }
             Write-Output "Emotion inference ready: $($runtime.model_version), $($runtime.inference_device) ($($runtime.device_name))."
         }
         if ($hasVaModel) {
-            $activeVaVersion = "roberta_va_regression"
+            $activeVaVersion = $vaModelVersion
             $activeVaFile = Join-Path $stateDir "va-active-model.txt"
             if (Test-Path -LiteralPath $activeVaFile) {
                 $savedVaVersion = (Get-Content -LiteralPath $activeVaFile -Raw).Trim()
-                $candidateDir = Join-Path (Join-Path $root "code-train\train-KLCN\output") $savedVaVersion
+                $candidateDir = Join-Path $vaModelRoot $savedVaVersion
                 $candidateCheckpoint = Join-Path $candidateDir ($savedVaVersion + ".pt")
                 if (-not (Test-Path -LiteralPath $candidateCheckpoint)) { $candidateCheckpoint = Join-Path $candidateDir "model.pt" }
                 $candidateTokenizer = Join-Path $candidateDir "tokenizer\tokenizer.json"
-                if ($savedVaVersion -match '^[A-Za-z0-9][A-Za-z0-9_-]{2,79}$' -and
-                    (Test-Path -LiteralPath $candidateCheckpoint) -and (Test-Path -LiteralPath $candidateTokenizer)) {
+                $candidateClassifier = Join-Path $candidateDir "best_model\model.safetensors"
+                $candidateConfig = Join-Path $candidateDir "label_config.json"
+                $validClassifier = (Test-Path -LiteralPath $candidateClassifier) -and (Test-Path -LiteralPath $candidateConfig)
+                $validLegacy = (Test-Path -LiteralPath $candidateCheckpoint) -and (Test-Path -LiteralPath $candidateTokenizer)
+                if ($savedVaVersion -match '^[A-Za-z0-9][A-Za-z0-9_-]{2,79}$' -and ($validClassifier -or $validLegacy)) {
                     $activeVaVersion = $savedVaVersion
                 }
             }
+            $inferenceEnvironment.VA_MODEL_VERSION = $activeVaVersion
             $vaRuntime = Invoke-Readiness "$($aiUrl)health/va/ready" 240 $activeVaVersion
             Write-Output "Valence/arousal inference ready: $($vaRuntime.model_version), $($vaRuntime.inference_device)."
-        }
-        $viActiveFile = Join-Path $stateDir "vi-active-model.txt"
-        if (Test-Path -LiteralPath $viActiveFile) {
-            $viVersion = (Get-Content -LiteralPath $viActiveFile -Raw).Trim()
-            if ($viVersion -match '^[A-Za-z0-9][A-Za-z0-9_-]{2,79}$') {
-                $viRuntime = Invoke-Readiness "$($aiUrl)health/vi/ready" 240 $viVersion
-                Write-Output "Vietnamese emotion inference ready: $($viRuntime.model_version), $($viRuntime.inference_device)."
-            }
         }
         $viActiveFile = Join-Path $stateDir "vi-active-model.txt"
         if (Test-Path -LiteralPath $viActiveFile) {
@@ -421,15 +429,6 @@ try {
         }
     }
 
-    $buildOutput = & dotnet build (Join-Path $backendDir "mood_recommendation.csproj") `
-        --no-restore --configuration Release 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "Backend build failed: $($buildOutput -join ' ')"
-    }
-    $backendDll = Join-Path $backendDir "bin\Release\net10.0\mood_recommendation.dll"
-    if (-not (Test-Path -LiteralPath $backendDll)) {
-        throw "Backend build succeeded but output DLL is missing: $backendDll"
-    }
     $backendEnvironment = @{
         ASPNETCORE_ENVIRONMENT = "Development"
         ASPNETCORE_URLS = "http://${ListenAddress}:${apiPort}"
@@ -466,3 +465,4 @@ catch {
     try { Stop-ManagedProcesses $script:state } catch { Write-Error $_ }
     throw $failure
 }
+

@@ -33,19 +33,32 @@ public class HistoryController(MongoStore db, ExternalCatalog external) : Contro
     {
         if (page < 1 || page > 100000) return BadRequest();
         var query = db.DanhGias.Where(x => x.TaiKhoanID == UserId);
+        var rows = await query.OrderByDescending(x => x.ThoiGian).ThenByDescending(x => x.DanhGiaID)
+            .Skip((page - 1) * 50).Take(50).ToListAsync();
+        var ids = rows.Select(x => x.NoiDungID).Distinct().ToArray();
+        var contents = await PersonalContentQuery.Contents(db, ids);
+        var references = await PersonalContentQuery.References(external, ids, HttpContext.RequestAborted);
+        string? Snapshot(DanhGia row, string field) => row.ExtraElements.TryGetValue(field, out var value) && value.IsString ? value.AsString : null;
         return Ok(new { total = await query.CountAsync(), page, pageSize = 50,
-            items = await query.OrderByDescending(x => x.ThoiGian).ThenByDescending(x => x.DanhGiaID)
-                .Skip((page - 1) * 50).Take(50)
-                .Select(x => new { x.DanhGiaID, x.NoiDungID, x.SoSao, x.NhanXet, x.ThoiGian }).ToListAsync() });
+            items = rows.Select(x => new {
+                x.DanhGiaID, x.NoiDungID, x.SoSao, x.NhanXet, x.ThoiGian, x.RecommendationId,
+                available = contents.ContainsKey(x.NoiDungID) || references.Contains(x.NoiDungID),
+                content = PersonalContentQuery.Card(contents.GetValueOrDefault(x.NoiDungID), x.NoiDungID,
+                    Snapshot(x, "title"), Snapshot(x, "imageUrl"), Snapshot(x, "contentType"))
+            }) });
     }
     [HttpPost("ratings")]
     public async Task<IActionResult> Rate(RatingDto dto)
     {
-        if (!await db.NoiDungGiaiTris.AnyAsync(x => x.NoiDungID == dto.NoiDungID) && !await external.Contains(dto.NoiDungID)) return NotFound();
+        var content = await db.GetContent(dto.NoiDungID) ?? await external.Get(dto.NoiDungID, HttpContext.RequestAborted);
+        if (content is null) return NotFound();
         if (!await ActivityQuery.ValidRecommendation(db, UserId, dto.RecommendationId, dto.NoiDungID))
             return BadRequest(new { message = "Invalid recommendation reference." });
         var rating = new DanhGia { TaiKhoanID = UserId, NoiDungID = dto.NoiDungID, RecommendationId = dto.RecommendationId,
             SoSao = dto.SoSao, NhanXet = dto.NhanXet?.Trim(), ThoiGian = DateTime.UtcNow };
+        rating.ExtraElements["title"] = content.TieuDe;
+        rating.ExtraElements["imageUrl"] = content.HinhAnh is null ? MongoDB.Bson.BsonNull.Value : content.HinhAnh;
+        rating.ExtraElements["contentType"] = content.LoaiNoiDung;
         await db.Insert(rating);
         
         return Ok(new { rating.DanhGiaID, rating.NoiDungID, rating.SoSao, rating.NhanXet, rating.ThoiGian });

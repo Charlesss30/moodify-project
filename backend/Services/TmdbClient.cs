@@ -1,8 +1,8 @@
-﻿using System.Net.Http.Headers;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 namespace mood_recommendation.Services;
-public sealed record TmdbMovie(string Title,string? Director,string? Genre,string? Description,string? Poster,decimal? Rating,string? ImdbId,string Year,string TmdbId,string? TrailerUrl,string Source="TMDB",string RatingSource="TMDB");
+public sealed record TmdbMovie(string Title,string? Director,string? Genre,string? Description,string? Poster,decimal? Rating,string? ImdbId,string Year,string TmdbId,string? TrailerUrl,string Source="TMDB",string RatingSource="TMDB",string[]? Cast=null,int? RuntimeMinutes=null);
 public sealed record TmdbSearchItem(int Id,string Title,string Year,string? Poster);
 public sealed class TmdbClient(HttpClient client,IConfiguration config)
 {
@@ -44,6 +44,12 @@ public sealed class TmdbClient(HttpClient client,IConfiguration config)
         // Match the existing local genre defaults; do not rename the user's genres.
         var genres=string.Join(", ",d.GetProperty("genres").EnumerateArray().Select(g=>Text(g,"name")=="Science Fiction"?"Sci-Fi":Text(g,"name")));
         decimal? rating=d.TryGetProperty("vote_count",out var votes)&&votes.GetInt32()>0&&d.TryGetProperty("vote_average",out var score)&&score.TryGetDecimal(out var number)&&number>=0&&number<=10?number:null;
-        return new(Text(d,"title")??"",directors,genres,Text(d,"overview"),Poster(d),rating,imdb,Year(d),id.ToString(),d.TryGetProperty("videos",out var videos)?TrailerLookup.Select(videos):null);
+        var cast = d.TryGetProperty("credits", out var creditData) && creditData.TryGetProperty("cast", out var castData)
+            ? castData.EnumerateArray().Select(c => Text(c, "name")?.Trim())
+                .Where(n => !string.IsNullOrWhiteSpace(n) && n.Length <= 120)
+                .Select(n => n!).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToArray() : [];
+        int? runtime = d.TryGetProperty("runtime", out var runtimeData)
+            && runtimeData.ValueKind == JsonValueKind.Number && runtimeData.TryGetInt32(out var minutes) && minutes is > 0 and <= 1000 ? minutes : null;
+        return new(Text(d,"title")??"",directors,genres,Text(d,"overview"),Poster(d),rating,imdb,Year(d),id.ToString(),d.TryGetProperty("videos",out var videos)?TrailerLookup.Select(videos):null, Cast:cast, RuntimeMinutes:runtime);
     }
 }

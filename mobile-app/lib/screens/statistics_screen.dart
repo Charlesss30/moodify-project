@@ -14,6 +14,7 @@ class StatisticsScreen extends StatefulWidget {
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
   int days = 30, generation = 0, _section = 0, _loadedDays = 30;
+  int? _year, _loadedYear;
   Map<String, dynamic>? data;
   String? error;
   bool loading = true;
@@ -31,12 +32,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     });
     try {
       final result = await ApiService.request(
-        '/Statistics?days=$days&offsetMinutes=${DateTime.now().timeZoneOffset.inMinutes}',
+        '/Statistics?${_year == null ? 'days=$days' : 'year=$_year'}&offsetMinutes=${DateTime.now().timeZoneOffset.inMinutes}',
       );
       if (mounted && current == generation) {
         setState(() {
           data = Map<String, dynamic>.from(result as Map);
-          _loadedDays = days;
+          _loadedDays = (result['days'] as num?)?.toInt() ?? days;
+          _loadedYear = _year;
         });
       }
     } catch (e) {
@@ -166,18 +168,50 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               'Nhìn lại hành trình của bạn',
               subtitle: 'Cảm xúc và những lựa chọn giải trí qua từng ngày.',
             ),
-            SegmentedButton<int>(
-              segments: const [
-                ButtonSegment(value: 7, label: Text('7 ngày')),
-                ButtonSegment(value: 30, label: Text('30 ngày')),
-                ButtonSegment(value: 90, label: Text('90 ngày')),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final count in [7, 30, 90])
+                  ChoiceChip(
+                    label: Text('$count ngày'),
+                    selected: _year == null && days == count,
+                    onSelected: (_) {
+                      days = count;
+                      _year = null;
+                      load();
+                    },
+                  ),
+                ChoiceChip(
+                  label: const Text('Theo năm'),
+                  selected: _year != null,
+                  onSelected: (_) {
+                    _year ??= DateTime.now().year;
+                    load();
+                  },
+                ),
               ],
-              selected: {days},
-              onSelectionChanged: (v) {
-                days = v.first;
-                load();
-              },
             ),
+            if (_year != null) ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                key: ValueKey('statistics-year-$_year'),
+                initialValue: _year,
+                decoration: const InputDecoration(
+                  labelText: 'Năm thống kê',
+                  prefixIcon: Icon(Icons.calendar_month_outlined),
+                ),
+                items: [
+                  for (var value = DateTime.now().year; value >= 2000; value--)
+                    DropdownMenuItem(value: value, child: Text('Năm $value')),
+                ],
+                onChanged: (value) {
+                  if (value == null || value == _year) return;
+                  _year = value;
+                  load();
+                },
+              ),
+            ],
             const SizedBox(height: 18),
             if (loading && data == null)
               const LoadingCards()
@@ -195,11 +229,14 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                     : 'Đang hiển thị số liệu gần nhất',
               ),
             if (data != null) ...[
-              if (_loadedDays != days)
+              if (_loadedYear != _year ||
+                  (_year == null && _loadedDays != days))
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Text(
-                    'Số liệu gần nhất: $_loadedDays ngày.',
+                    _loadedYear != null
+                        ? 'Số liệu gần nhất: năm $_loadedYear.'
+                        : 'Số liệu gần nhất: $_loadedDays ngày.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
@@ -262,7 +299,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Kỳ hiện tại gồm hôm nay chưa kết thúc; kỳ trước gồm các ngày đầy đủ.',
+                _loadedYear != null
+                    ? (_loadedYear == DateTime.now().year
+                          ? 'Năm nay tính đến hiện tại; so sánh cùng giai đoạn năm trước.'
+                          : 'So sánh với năm trước đó. Mỗi điểm trên biểu đồ là một tháng.')
+                    : 'Kỳ hiện tại gồm hôm nay chưa kết thúc; kỳ trước gồm các ngày đầy đủ.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 22),
@@ -277,12 +318,17 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               const SizedBox(height: 16),
               if (_section == 0) ...[
                 _panel(
-                  'Xu hướng tâm trạng theo ngày',
+                  _loadedYear == null
+                      ? 'Xu hướng tâm trạng theo ngày'
+                      : 'Xu hướng tâm trạng năm $_loadedYear',
                   DailyTrendChart(
-                    key: ValueKey('mood-$_loadedDays'),
+                    key: ValueKey('mood-$_loadedDays-$_loadedYear'),
+                    monthly: _loadedYear != null,
                     rows: trend,
                   ),
-                  subtitle: 'Trung bình từ những lần tâm trạng được ghi nhận.',
+                  subtitle: _loadedYear == null
+                      ? 'Trung bình từ những lần tâm trạng được ghi nhận.'
+                      : 'Mỗi tháng là trung bình của các bản ghi thực tế; tháng chưa có dữ liệu để trống.',
                 ),
                 bars(
                   'Phân bố tâm trạng',
@@ -292,9 +338,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 ),
               ] else ...[
                 _panel(
-                  'Tương tác mỗi ngày',
+                  _loadedYear == null
+                      ? 'Tương tác mỗi ngày'
+                      : 'Tương tác mỗi tháng',
                   DailyTrendChart(
-                    key: ValueKey('activity-$_loadedDays'),
+                    key: ValueKey('activity-$_loadedDays-$_loadedYear'),
+                    monthly: _loadedYear != null,
                     rows: trend,
                     activity: true,
                   ),

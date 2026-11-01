@@ -16,10 +16,11 @@ namespace mood_recommendation.Controllers
         private static readonly string[] MovieTypes = ["Movie", "Phim"];
         private readonly MongoStore _context;
         private readonly ExternalCatalog external;
+        private readonly MovieMetadataService metadata;
 
-        public MoviesController(MongoStore context, ExternalCatalog catalog)
+        public MoviesController(MongoStore context, ExternalCatalog catalog, MovieMetadataService metadataService)
         {
-            _context = context; external = catalog;
+            _context = context; external = catalog; metadata = metadataService;
         }
 
         [HttpGet]
@@ -47,6 +48,7 @@ namespace mood_recommendation.Controllers
             {
                 var movie = await _context.GetContent(id) ?? await external.Get(id,HttpContext.RequestAborted);
                 if (movie != null && movie.LoaiNoiDung != "Movie") return NotFound();
+                if (movie is not null) await metadata.EnrichAsync(movie, HttpContext.RequestAborted);
                 return movie == null ? NotFound(new { message = "Movie not found." }) : Ok(movie);
             }
             catch (Exception ex) when (ex is not MongoException && ex is not System.ComponentModel.DataAnnotations.ValidationException)
@@ -75,7 +77,7 @@ namespace mood_recommendation.Controllers
                 {
                     NoiDungID = dto.NoiDungID.Trim(), TieuDe = dto.TieuDe.Trim(), LoaiNoiDung = "Movie",
                     HinhAnh = dto.HinhAnh, MoTa = dto.MoTa,
-                    Phim = new Phim { TMDBID = dto.TMDBID, RatingSource = dto.RatingSource, MetadataSource = dto.MetadataSource, TrailerUrl = string.IsNullOrWhiteSpace(dto.TrailerUrl) ? null : dto.TrailerUrl, Director = dto.Director, TheLoai = dto.TheLoai, DiemDanhGiaTB = dto.DiemDanhGiaTB, IMDBID = dto.IMDBID }
+                    Phim = new Phim { TMDBID = dto.TMDBID, RatingSource = dto.RatingSource, MetadataSource = dto.MetadataSource, TrailerUrl = string.IsNullOrWhiteSpace(dto.TrailerUrl) ? null : dto.TrailerUrl, Director = dto.Director, ReleaseYear=dto.ReleaseYear, RuntimeMinutes=dto.RuntimeMinutes, Cast=dto.Cast??[], TheLoai = dto.TheLoai, DiemDanhGiaTB = dto.DiemDanhGiaTB, IMDBID = dto.IMDBID }
                 };
                 var moodError = await new GenreMoodService(_context).Apply(content, dto.TheLoai, dto.Valence, dto.Arousal, dto.MoodSource, true);
                 if (moodError != null) return BadRequest(new { message = moodError });
@@ -109,6 +111,9 @@ namespace mood_recommendation.Controllers
 
                 var moodError = await new GenreMoodService(_context).Apply(movie, dto.TheLoai, dto.Valence, dto.Arousal, dto.MoodSource, false);
                 if (moodError != null) return BadRequest(new { message = moodError });
+                movie.Phim.ReleaseYear = dto.ReleaseYear ?? movie.Phim.ReleaseYear;
+                movie.Phim.RuntimeMinutes = dto.RuntimeMinutes ?? movie.Phim.RuntimeMinutes;
+                movie.Phim.Cast = dto.Cast ?? movie.Phim.Cast;
                 movie.TieuDe = dto.TieuDe.Trim(); movie.HinhAnh = dto.HinhAnh; movie.MoTa = dto.MoTa;
                 movie.Phim.TrailerUrl = string.IsNullOrWhiteSpace(dto.TrailerUrl) ? null : dto.TrailerUrl;
                 movie.Phim.TMDBID = dto.TMDBID ?? movie.Phim.TMDBID;

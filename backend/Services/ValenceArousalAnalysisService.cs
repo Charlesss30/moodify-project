@@ -15,12 +15,17 @@ public sealed record ValenceArousalMoodResult(
     string MoodName,
     decimal MoodValence,
     decimal MoodArousal,
-    IReadOnlyList<ValenceArousalMoodCandidate> MoodCandidates);
+    IReadOnlyList<ValenceArousalMoodCandidate> MoodCandidates,
+    string? Emotion,
+    double? Confidence,
+    bool? Accepted,
+    IReadOnlyList<VietnameseEmotionCandidate> EmotionCandidates);
 
 public sealed record ValenceArousalCandidate(
     [property: JsonPropertyName("model_version")] string ModelVersion,
     [property: JsonPropertyName("checkpoint")] string Checkpoint,
-    [property: JsonPropertyName("tokenizer_available")] bool TokenizerAvailable);
+    [property: JsonPropertyName("tokenizer_available")] bool TokenizerAvailable,
+    [property: JsonPropertyName("model_type")] string? ModelType);
 public sealed record ValenceArousalCatalog(IReadOnlyList<ValenceArousalCandidate> Items, string? ActiveVersion);
 public sealed record ValenceArousalRuntime(string Status, bool Ready, string? ModelVersion, string? Language, string? InferenceDevice);
 public sealed record ValenceArousalActivation(int StatusCode, string? Message, string? ActiveVersion, string? Device);
@@ -30,6 +35,9 @@ public sealed class ValenceArousalAnalysisService(
     MongoStore db,
     IConfiguration configuration)
 {
+    private static readonly HashSet<string> ExpectedEmotionLabels = new(StringComparer.Ordinal)
+        { "Sadness", "Enjoyment", "Love", "Anger", "Fear", "Surprise" };
+
     public async Task<ValenceArousalRuntime> RuntimeStatusAsync(CancellationToken ct)
     {
         try
@@ -92,7 +100,17 @@ public sealed class ValenceArousalAnalysisService(
             || !double.IsFinite(prediction.Valence)
             || prediction.Valence is < -1 or > 1
             || !double.IsFinite(prediction.Arousal)
-            || prediction.Arousal is < -1 or > 1) return null;
+            || prediction.Arousal is < -1 or > 1
+            || (prediction.Emotion is not null && (!double.IsFinite(prediction.Confidence ?? double.NaN)
+                || !ExpectedEmotionLabels.Contains(prediction.Emotion)
+                || prediction.Confidence is < 0 or > 1
+                || prediction.EmotionCandidates.Count is < 1 or > 3
+                || prediction.EmotionCandidates.Any(item => string.IsNullOrWhiteSpace(item.Label)
+                    || !ExpectedEmotionLabels.Contains(item.Label)
+                    || !double.IsFinite(item.Score) || item.Score is < 0 or > 1)))) return null;
+        if (prediction.Emotion is not null && prediction.EmotionCandidates.Select(item => item.Label)
+                .Distinct(StringComparer.Ordinal).Count() != prediction.EmotionCandidates.Count)
+            return null;
 
         var moods = await db.TamTrangs.ToListAsync(ct);
         if (moods.Count == 0) return null;
@@ -118,7 +136,8 @@ public sealed class ValenceArousalAnalysisService(
             (mood.Mood.MinValence + mood.Mood.MaxValence) / 2m,
             (mood.Mood.MinArousal + mood.Mood.MaxArousal) / 2m,
             rankedMoods.Take(3).Select(item => new ValenceArousalMoodCandidate(
-                item.Mood.TamTrangID, item.Mood.TenTamTrang)).ToArray());
+                item.Mood.TamTrangID, item.Mood.TenTamTrang)).ToArray(),
+            prediction.Emotion, prediction.Confidence, prediction.Accepted, prediction.EmotionCandidates);
     }
 
     private sealed class VaPrediction
@@ -127,6 +146,10 @@ public sealed class ValenceArousalAnalysisService(
         [JsonPropertyName("language")] public string? Language { get; init; }
         [JsonPropertyName("valence")] public double Valence { get; init; }
         [JsonPropertyName("arousal")] public double Arousal { get; init; }
+        [JsonPropertyName("emotion")] public string? Emotion { get; init; }
+        [JsonPropertyName("confidence")] public double? Confidence { get; init; }
+        [JsonPropertyName("accepted")] public bool? Accepted { get; init; }
+        [JsonPropertyName("emotion_candidates")] public List<VietnameseEmotionCandidate> EmotionCandidates { get; init; } = [];
     }
 
     private sealed class VaHealth

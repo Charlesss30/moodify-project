@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using mood_recommendation.Data;
@@ -39,12 +41,37 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
             { context.Fail("Invalid account."); return; }
             var db = context.HttpContext.RequestServices.GetRequiredService<MongoStore>();
             var user = await db.TaiKhoans.FirstOrDefaultAsync(x => x.TaiKhoanID == userId);
+            var version = context.Principal?.FindFirstValue("sv")??"0";
+            if(user is not null && (!long.TryParse(version,out var sessionVersion) || user.SessionVersion!=sessionVersion))
+            {context.Fail("Session has been revoked.");return;}
             var role = user == null ? "" : AdminRoles.IsAdmin(user.VaiTro) ? AdminRoles.Name : user.VaiTro;
             if (user == null || !user.TrangThai || context.Principal!.FindFirstValue(ClaimTypes.Role) != role)
                 context.Fail("Account disabled or permissions changed.");
         }
     };
 });
+builder.Services.AddRateLimiter(options => {
+    options.RejectionStatusCode=429;
+    options.AddPolicy("push-test",context=>RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirstValue(ClaimTypes.NameIdentifier)??context.Connection.RemoteIpAddress?.ToString()??"unknown",
+        _=>new FixedWindowRateLimiterOptions {PermitLimit=3,Window=TimeSpan.FromMinutes(1),QueueLimit=0}));
+    options.AddPolicy("recovery",context=>RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString()??"unknown",
+        _=>new FixedWindowRateLimiterOptions {PermitLimit=20,Window=TimeSpan.FromMinutes(1),QueueLimit=0}));
+    options.AddPolicy("google-login",context=>RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString()??"unknown",
+        _=>new FixedWindowRateLimiterOptions {PermitLimit=20,Window=TimeSpan.FromMinutes(1),QueueLimit=0}));
+});
+builder.Services.AddSingleton(new RecoverySecret(System.Security.Cryptography.SHA256.HashData(
+    Encoding.UTF8.GetBytes("moodify-recovery:"+signingKey))));
+builder.Services.AddSingleton<PasswordEmailService>();
+builder.Services.AddHostedService(sp=>sp.GetRequiredService<PasswordEmailService>());
+builder.Services.AddSingleton<PasswordRecoveryService>();
+builder.Services.AddSingleton<PushNotificationService>();
+builder.Services.AddHostedService<PushNotificationWorker>();
+builder.Services.AddSingleton<FirebaseGateway>();
+builder.Services.AddSingleton<IGoogleIdentityVerifier>(sp=>sp.GetRequiredService<FirebaseGateway>());
+builder.Services.AddSingleton<IPushDelivery>(sp=>sp.GetRequiredService<FirebaseGateway>());
 builder.Services.AddAuthorization();
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient("EmotionInference", client =>
@@ -90,6 +117,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(builder.Configuration["Mongo:ConnectionString"] ?? "mongodb://127.0.0.1:27017"));
 builder.Services.AddSingleton<MongoStore>();
 builder.Services.AddSingleton<ExternalCatalog>();
+builder.Services.AddSingleton<MovieMetadataService>();
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -97,6 +125,9 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddHttpClient("Tmdb", client => client.Timeout = TimeSpan.FromSeconds(10));
 var app = builder.Build();
+await app.Services.GetRequiredService<PasswordRecoveryService>().InitializeAsync();
+await app.Services.GetRequiredService<PushNotificationService>().InitializeAsync();
+
 await app.Services.GetRequiredService<MongoStore>().Initialize(Path.Combine(app.Environment.ContentRootPath,"Data/mongo-schema.json"));
 app.Use(async (context,next) => {
     var store=context.RequestServices.GetRequiredService<MongoStore>();
@@ -122,7 +153,9 @@ app.UseStaticFiles();
 app.UseHttpsRedirection();
 
 app.UseCors("Frontend");
+app.UseRouting();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();

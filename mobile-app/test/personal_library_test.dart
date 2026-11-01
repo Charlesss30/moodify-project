@@ -338,6 +338,11 @@ void main() {
             )
             .first,
       );
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Nội dung đã lưu')),
+        alignment: 0.3,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Nội dung đã lưu'));
       await tester.pumpAndSettle();
       expect(
