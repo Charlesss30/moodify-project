@@ -37,6 +37,7 @@ public sealed class FakeInferenceServer : IDisposable
     public string Scenario { get; set; } = "matched";
     public string BilingualScenario { get; set; } = "matched";
     public int BilingualStatusCode { get; set; } = 200;
+    public bool SixClassModels {get;set;}
     public bool FingerprintTampered {get;set;}
     public int ModelActivations {get;set;}
     string _loadedFingerprint=new string('b',64);
@@ -80,7 +81,7 @@ public sealed class FakeInferenceServer : IDisposable
                 var changed=FingerprintTampered&&version=="quality_fixture_candidate";
                 var bundle=new string(changed?'d':'b',64);
                 var active=version==(kind=="vi"?ViVersion:VaVersion);
-                await WriteAsync(context.Response,new{kind,version,bundleSha256=bundle,weightSha256=new string('a',64),
+                await WriteAsync(context.Response,new{kind,version,taxonomy=SixClassModels?"moodify-six-v1":null,bundleSha256=bundle,weightSha256=new string('a',64),
                     active,activeBundleSha256=active?_loadedFingerprint:null,
                     files=new[]{new{path="config.json",sha256=new string('c',64)},new{path="model.safetensors",sha256=new string('a',64)}}},cancellationToken);return;
             }
@@ -96,7 +97,9 @@ public sealed class FakeInferenceServer : IDisposable
             {
                 var vi = path.Contains("/vi/");
                 await WriteAsync(context.Response, new { status = "ready", language = vi ? "vi" : "en",
-                    model_version = vi ? ViVersion : VaVersion, inference_device = "cpu" }, cancellationToken);
+                    model_version = vi ? ViVersion : VaVersion, inference_device = "cpu",
+                    model_type=SixClassModels?"emotion_classification_va_adapter":vi?"emotion_classification_va_adapter":"valence_arousal_regression",
+                    taxonomy=SixClassModels?"moodify-six-v1":vi?"vsmec-seven-v1":null }, cancellationToken);
                 return;
             }
             if (path is "/predict-vi" or "/predict-va")
@@ -120,6 +123,17 @@ public sealed class FakeInferenceServer : IDisposable
                     payload["confidence"] = BilingualScenario == "bad_confidence" ? 1.5 : BilingualScenario=="low_negative" ? .6 : .94;
                     payload["accepted"] = BilingualScenario is not ("low" or "low_negative");
                     payload["emotion_candidates"] = new[] { new { label = negative ? "Sadness" : "Enjoyment", score = BilingualScenario=="low_negative" ? .6 : .94 }, new { label = "Other", score = .03 } };
+                }
+                if(SixClassModels) {
+                    payload["model_type"]="emotion_classification_va_adapter";
+                    payload["taxonomy"]="moodify-six-v1";
+                    payload["score_type"]="softmax_not_accuracy";
+                    payload["calibration_status"]="uncalibrated";
+                    payload["emotion"]="Enjoyment";payload["confidence"]=.94;
+                    payload["accepted"]=BilingualScenario=="low"?(object)false:null;
+                    payload["emotion_candidates"]=new[]{new{label="Enjoyment",score=.94},new{label="Love",score=.02},new{label="Sadness",score=.01}};
+                    payload["probabilities"]=new Dictionary<string,double>{{"Sadness",.01},{"Enjoyment",.94},{"Love",.02},{"Anger",.01},{"Fear",.01},{"Surprise",BilingualScenario=="bad_probabilities"?.2:.01}};
+                    payload["valence"]=.74;payload["arousal"]=.67;
                 }
                 await WriteAsync(context.Response, payload, cancellationToken); return;
             }

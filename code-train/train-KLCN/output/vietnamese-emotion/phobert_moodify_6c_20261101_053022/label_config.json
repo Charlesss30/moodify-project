@@ -1,0 +1,59 @@
+{
+  "labels": [
+    "Sadness",
+    "Enjoyment",
+    "Love",
+    "Anger",
+    "Fear",
+    "Surprise"
+  ],
+  "id2label": {
+    "0": "Sadness",
+    "1": "Enjoyment",
+    "2": "Love",
+    "3": "Anger",
+    "4": "Fear",
+    "5": "Surprise"
+  },
+  "va_anchors": {
+    "Sadness": [
+      -0.8,
+      -0.6
+    ],
+    "Enjoyment": [
+      0.8,
+      0.7
+    ],
+    "Love": [
+      0.8,
+      0.3
+    ],
+    "Anger": [
+      -0.8,
+      0.8
+    ],
+    "Fear": [
+      -0.7,
+      0.9
+    ],
+    "Surprise": [
+      0.5,
+      0.9
+    ]
+  },
+  "model_name": "vinai/phobert-base-v2",
+  "max_len": 96,
+  "use_word_segmentation": true,
+  "eval": {
+    "test_mt": {
+      "n": 2000,
+      "accuracy": 0.857,
+      "macro_f1": 0.8107988944100111
+    },
+    "test_vsmec_5cls": {
+      "n": 432,
+      "accuracy": 0.7939814814814815,
+      "macro_f1": 0.6418010436595553
+    }
+  }
+}

@@ -21,6 +21,7 @@ if (args.Contains("--tmdb-contract")) { Console.WriteLine($"PASS: {await TmdbTes
 if (args.Contains("--tmdb-live")) { await TmdbTests.Live(root);return; }
 if (args.Contains("--live-read")) { await MongoReadCheck.Run(original);return; }
 if (args.Contains("--browser-smoke")) { await BrowserSmoke.Run(root,original);return; }
+if (args.Contains("--six-class-real")) { Environment.SetEnvironmentVariable("MOODIFY_SMOKE_SIX","true");await BilingualRealInferenceSmoke.Run(root,original);return; }
 if (args.Contains("--bilingual-real")) { await BilingualRealInferenceSmoke.Run(root,original);return; }
 if (args.Contains("--mood-edge-contract")) { Console.WriteLine($"PASS: {MobileAiEdgeTests.Run(root)} adversarial context cases.");return; }
 if (args.Contains("--mood-context-contract")) { Console.WriteLine($"PASS: {SemanticMoodMapperTests.Run()} context mapping assertions.");return; }
@@ -603,6 +604,8 @@ try
     });
     await AiCompletionTests.Run(db,Call,Check,root,eit,at,ut);
     await ModelQualityTests.Run(db,Call,Check,eit,at,ut,inference);
+    await ModelPackageTests.Run(root,client,Check,eit,at,inference);
+    await SixClassIntegrationTests.Run(db,Call,Check,eit,ut,inference);
     Console.WriteLine($"PASS: {checks} HTTP and business assertions on an isolated MongoDB database.");
 }
 finally

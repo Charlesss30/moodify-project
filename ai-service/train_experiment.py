@@ -17,6 +17,9 @@ def main():
     p.add_argument("--out", required=True)
     p.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     args = p.parse_args()
+    if args.device == "cpu":
+        import os
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
     bundle = json.loads(Path(args.bundle).read_text(encoding="utf-8-sig"))
     for field, checksum in (("datasetJson", "datasetHash"), ("configJson", "configHash")):
         if digest(bundle[field]).lower() != bundle[checksum].lower():
@@ -63,6 +66,9 @@ def main():
 
 
 def train_nlp(rows, cfg, base, out, version, device):
+    if cfg["taskType"] in ("emotion6_en", "emotion6_vi"):
+        from train_six_emotion import train
+        return train(rows, cfg, base, out, version, device)
     import math
     import torch
     from transformers import AutoModelForSequenceClassification, AutoTokenizer

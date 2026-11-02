@@ -23,7 +23,8 @@ public sealed record BilingualAnalysisResponse(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? Confidence,
     string? ReasonCode, string Message,
     string? MappingMethod = null, double? RecommendationValence = null, double? RecommendationArousal = null,
-    string InputScope = "full_text", int? AnalyzedCharacterCount = null);
+    string InputScope = "full_text", int? AnalyzedCharacterCount = null,
+    string? Taxonomy = null, string? CalibrationStatus = null, bool? ModelAccepted = null);
 
 /// <summary>One public VI/EN contract; only accepted, validated results receive a server receipt.</summary>
 public sealed class BilingualMoodAnalysisService(
@@ -38,6 +39,9 @@ public sealed class BilingualMoodAnalysisService(
         SemanticMoodMapper.Methods.Any(method => value == MappingVersion(policyVersion, method));
     private static readonly HashSet<string> Labels = new(
         ["Anger", "Disgust", "Enjoyment", "Fear", "Other", "Sadness", "Surprise"]);
+
+    private static readonly HashSet<string> SixLabels = new(
+        ["Sadness", "Enjoyment", "Love", "Anger", "Fear", "Surprise"]);
 
     public async Task<BilingualAnalysisResponse> AnalyzeAsync(string text, string requestedLanguage, int userId, CancellationToken ct)
     {
@@ -89,7 +93,12 @@ public sealed class BilingualMoodAnalysisService(
         var eligible=moods.Where(m=>policy.MoodIds is null||policy.MoodIds.Contains(m.TamTrangID)).ToList();
         if(eligible.Count==0 || policy.MoodIds?.Any(id=>!moods.Any(m=>m.TamTrangID==id))==true)
             return Failure("unavailable",language,"invalid_mood_configuration","Policy references a mood that was removed. Ask the AI engineer to review.");
-        var modelAccepted = language == "en" || (p.Accepted == true && p.Confidence>=policy.MinimumConfidence);
+        // Public Accepted means a valid suggestion can be confirmed, not that a
+        // softmax score has been independently calibrated. Preserve model acceptance separately.
+        var classification = p.Emotion is not null;
+        var modelAccepted = !classification || (p.Accepted != false && p.Confidence >= policy.MinimumConfidence);
+        var modelType = classification ? "emotion_classification_va_adapter" : "valence_arousal_regression";
+        var scoreType = classification ? "softmax_not_accuracy" : "regression_coordinates";
         var decision = SemanticMoodMapper.Decide(text, language, p.Emotion, p.Valence!.Value, p.Arousal!.Value, eligible);
         var accepted = modelAccepted && decision.Mood is not null;
         var mood = decision.Mood;
@@ -101,7 +110,7 @@ public sealed class BilingualMoodAnalysisService(
         var id = accepted ? "va_" + Guid.NewGuid().ToString("N") : null;
         if (id is not null)
             await Receipts.InsertOneAsync(new VaAnalysisReceipt {
-                Id = id, UserId = userId, Language = language, ModelType = ModelType(language), ModelVersion = p.ModelVersion!,
+                Id = id, UserId = userId, Language = language, ModelType = modelType, ModelVersion = p.ModelVersion!,
                 MappingVersion = mappingVersion, RoutingVersion = MoodLanguageRouter.Version,
                 MoodSetHash = MoodSetHash(moods), SuggestedMoodId = mood!.TamTrangID,
                 Valence = (decimal)p.Valence!.Value, Arousal = (decimal)p.Arousal!.Value,
@@ -109,14 +118,14 @@ public sealed class BilingualMoodAnalysisService(
                 CreatedAt = now, ExpiresAt = expires, Accepted = true
             }, cancellationToken: ct);
 
-        return new(accepted ? "matched" : "unknown", "ai_va", language, ModelType(language), p.ModelVersion,
-            mappingVersion, MoodLanguageRouter.Version, ScoreType(language), accepted, true,
+        return new(accepted ? "matched" : "unknown", "ai_va", language, modelType, p.ModelVersion,
+            mappingVersion, MoodLanguageRouter.Version, scoreType, accepted, true,
             id, accepted ? expires : null, p.Valence, p.Arousal,
             accepted ? new(mood!.TamTrangID, mood.TenTamTrang, (mood.MinValence + mood.MaxValence) / 2m,
                 (mood.MinArousal + mood.MaxArousal) / 2m) : null,
             accepted ? [new ValenceArousalMoodCandidate(mood!.TamTrangID, mood.TenTamTrang)] : [],
-            language == "vi" ? p.EmotionCandidates! : [], language == "vi" ? p.Emotion : null,
-            language == "vi" ? p.Confidence : null, reason,
+            classification ? p.EmotionCandidates! : [], classification ? p.Emotion : null,
+            classification ? p.Confidence : null, reason,
             accepted ? decision.Method == "explicit_self_description"
                 ? "Đã chọn tâm trạng theo cảm xúc bạn mô tả. Hãy xác nhận hoặc chọn lại trước khi nhận gợi ý."
                 : decision.Method == "model_negation"
@@ -135,7 +144,10 @@ public sealed class BilingualMoodAnalysisService(
                     "low_confidence" => "Model chưa đạt ngưỡng tin cậy. Hãy diễn đạt rõ hơn hoặc chọn tâm trạng thủ công.",
                     _ => "Chưa xác định được tâm trạng phù hợp. Hãy mô tả rõ hơn hoặc chọn tâm trạng."
                 }, decision.Method, target is null ? null : (double)target.Value.Item1,
-                target is null ? null : (double)target.Value.Item2, modelInput.Scope, modelInput.Text.Length);
+                target is null ? null : (double)target.Value.Item2, modelInput.Scope, modelInput.Text.Length,
+                p.Taxonomy ?? (language == "vi" ? "vsmec-seven-v1" : null),
+                p.CalibrationStatus ?? (classification ? "legacy_default" : "not_applicable"),
+                classification ? p.Accepted : null);
     }
 
     public IMongoCollection<VaAnalysisReceipt> Receipts => db.Database.GetCollection<VaAnalysisReceipt>(ReceiptCollection);
@@ -193,17 +205,38 @@ public sealed class BilingualMoodAnalysisService(
     private static bool Valid(Prediction? p, string language)
     {
         if (p is null || !VersionValid(p.ModelVersion) || p.Language != language || !Coordinate(p.Valence) || !Coordinate(p.Arousal)) return false;
-        if (language == "en") return true;
-        if (!Labels.Contains(p.Emotion ?? "") || p.Accepted is null || p.Confidence is not (>= 0 and <= 1)
+        var classification = language == "vi" || p.Emotion is not null || p.ModelType == "emotion_classification_va_adapter";
+        if (!classification)
+            return language == "en" && p.Confidence is null && p.EmotionCandidates is null
+                && p.Taxonomy is null && p.ModelType is null or "valence_arousal_regression";
+        var sixClass = p.Taxonomy == "moodify-six-v1";
+        var allowed = sixClass ? SixLabels : Labels;
+        if ((!sixClass && language == "en")
+            || (p.Taxonomy is not null && p.Taxonomy is not ("moodify-six-v1" or "vsmec-seven-v1"))
+            || (p.ModelType is not null && p.ModelType != "emotion_classification_va_adapter")
+            || (p.ScoreType is not null && p.ScoreType != "softmax_not_accuracy")
+            || !allowed.Contains(p.Emotion ?? "") || (!sixClass && p.Accepted is null)
+            || p.Confidence is not (>= 0 and <= 1)
             || p.EmotionCandidates is not { Count: >= 1 and <= 3 } candidates
-            || candidates.Any(c => c is null || !Labels.Contains(c.Label) || !double.IsFinite(c.Score) || c.Score is < 0 or > 1)
+            || candidates.Any(c => c is null || !allowed.Contains(c.Label) || !double.IsFinite(c.Score) || c.Score is < 0 or > 1)
             || candidates.Select(c => c.Label).Distinct().Count() != candidates.Count
-            || candidates[0].Label != p.Emotion || candidates[0].Score != p.Confidence) return false;
-        return candidates.Zip(candidates.Skip(1)).All(pair => pair.First.Score >= pair.Second.Score);
+            || candidates[0].Label != p.Emotion || candidates[0].Score != p.Confidence
+            || !candidates.Zip(candidates.Skip(1)).All(pair => pair.First.Score >= pair.Second.Score)) return false;
+        if (sixClass && (p.Probabilities is not { Count: 6 } probabilities
+            || !probabilities.Keys.ToHashSet().SetEquals(SixLabels)
+            || probabilities.Values.Any(v => !double.IsFinite(v) || v is < 0 or > 1)
+            || Math.Abs(probabilities.Values.Sum() - 1) > 0.0001
+            || candidates.Any(c => Math.Abs(probabilities[c.Label] - c.Score) > 0.000001))) return false;
+        return true;
     }
 
     private sealed class Prediction
     {
+        [JsonPropertyName("model_type")] public string? ModelType { get; init; }
+        [JsonPropertyName("taxonomy")] public string? Taxonomy { get; init; }
+        [JsonPropertyName("score_type")] public string? ScoreType { get; init; }
+        [JsonPropertyName("calibration_status")] public string? CalibrationStatus { get; init; }
+        [JsonPropertyName("probabilities")] public Dictionary<string,double>? Probabilities { get; init; }
         [JsonPropertyName("model_version")] public string? ModelVersion { get; init; }
         [JsonPropertyName("language")] public string? Language { get; init; }
         [JsonPropertyName("valence")] public double? Valence { get; init; }

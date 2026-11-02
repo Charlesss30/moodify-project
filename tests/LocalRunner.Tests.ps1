@@ -1,13 +1,14 @@
-# Run with: powershell -NoProfile -File tests/LocalRunner.Tests.ps1
+﻿# Run with: powershell -NoProfile -File tests/LocalRunner.Tests.ps1
 # All process/listener/stop operations below are fixtures; no OS process is stopped.
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
+New-Item -ItemType Directory -Path (Join-Path $projectRoot ".local-build") -Force | Out-Null
 $tokens = $null
 $parseErrors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile(
     (Join-Path $projectRoot "scripts\moodify-local.ps1"), [ref]$tokens, [ref]$parseErrors)
 if ($parseErrors.Count) { throw "Runner syntax invalid." }
-$functions = @("Test-RecordedProcessIdentity", "Get-VerifiedManagedProcesses", "Test-ExpectedProcess", "Stop-ManagedProcesses")
+$functions = @("Test-RecordedProcessIdentity", "Get-VerifiedManagedProcesses", "Test-ExpectedProcess", "Stop-ManagedProcesses", "Get-ModelSelection", "Test-VaCandidate")
 foreach ($name in $functions) {
     $definition = $ast.FindAll({
         param($node)
@@ -104,7 +105,24 @@ try {
 
     Reset-Fixture
     Assert (@(Get-VerifiedManagedProcesses $legacy).Count -eq 0) "An empty/stale state must not count as running."
-    Write-Output "PASS: $script:checks runner identity/shutdown assertions. No OS process was stopped."
+    $selectionMarker = $script:statePath + ".selection"
+    try {
+        $selected = Get-ModelSelection $selectionMarker "roberta_va_regression"
+        Assert ($selected.Version -eq "roberta_va_regression" -and -not $selected.Controlled) "Legacy fallback should remain compatible."
+        'roberta_new_classifier' | Set-Content -LiteralPath $selectionMarker
+        Assert ((Get-ModelSelection $selectionMarker).Version -eq "roberta_new_classifier") "An active classifier must be selected by version."
+        '{"revision":3,"active_version":null}' | Set-Content -LiteralPath ($selectionMarker + ".lifecycle.json")
+        $selected = Get-ModelSelection $selectionMarker "roberta_va_regression"
+        Assert ($selected.Disabled -and -not $selected.Version) "Authoritative deactivation must override stale legacy marker and fallback."
+        '{"revision":4,"active_version":"../escape"}' | Set-Content -LiteralPath ($selectionMarker + ".lifecycle.json")
+        $refused=$false
+        try { $null=Get-ModelSelection $selectionMarker } catch { $refused=$true }
+        Assert $refused "A path outside model roots must be refused."
+    }
+    finally {
+        Remove-Item -LiteralPath $selectionMarker,($selectionMarker + ".lifecycle.json") -ErrorAction SilentlyContinue
+    }
+    Write-Output "PASS: $script:checks runner identity, lifecycle selection and shutdown assertions. No OS process was stopped."
 }
 finally {
     Remove-Item -LiteralPath $script:statePath -ErrorAction SilentlyContinue

@@ -1,0 +1,7 @@
+{
+  "test_set": "dair-ai/emotion split=test (in-distribution)",
+  "test_samples": 2000,
+  "accuracy": 0.9325,
+  "macro_f1": 0.9016774396172546,
+  "metrics_source": "label_config.json written by training notebook"
+}

@@ -50,10 +50,14 @@ public class AiWorkspaceController(MongoStore db, IWebHostEnvironment env, IConf
             policies = new[] {
                 new { language = "vi", modelType = "emotion_classification_va_adapter",
                     mappingVersion = viPolicy.Version,
-                    limitation = "Probability-weighted VSMEC anchors cannot represent positive, low-arousal VA (A >= 0.75 V)." },
-                new { language = "en", modelType = "valence_arousal_regression",
+                    limitation = (await viTask).Taxonomy == "moodify-six-v1"
+                        ? "Six-class probabilities use exported anchors. Threshold configuration is not independent calibration; users confirm suggestions."
+                        : "Probability-weighted VSMEC anchors cannot represent positive, low-arousal VA (A >= 0.75 V)." },
+                new { language = "en", modelType = (await enTask).ModelType ?? "valence_arousal_regression",
                     mappingVersion = enPolicy.Version,
-                    limitation = "Continuous regression coordinates have no classification confidence." }
+                    limitation = (await enTask).ModelType == "emotion_classification_va_adapter"
+                        ? "Six-class probabilities use exported anchors; softmax confidence is not accuracy."
+                        : "Continuous regression coordinates have no classification confidence." }
             },
             vietnamese = await viTask, english = await enTask,
             legacyMappingScope = "28-label GoEmotions classifier only; not the bilingual mobile VA mapping.",

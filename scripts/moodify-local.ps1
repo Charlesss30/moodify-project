@@ -1,7 +1,8 @@
-param(
+﻿param(
     [ValidateSet("Start", "Status", "Stop")]
     [string]$Action = "Status",
     [switch]$WithoutAI,
+    [switch]$WithoutLegacyClassifier,
     [string]$ListenAddress = "127.0.0.1"
 )
 
@@ -11,7 +12,8 @@ $backendDir = Join-Path $root "backend"
 $adminDir = Join-Path $root "admin-web"
 $aiDir = Join-Path $root "ai-service"
 $modelDir = Join-Path $root "code-train\train-KLCN\output\roberta_large_asl_en_01\best_model"
-$vaModelDir = Join-Path $root "code-train\train-KLCN\output\roberta_va_regression"
+$vaModelRoot = Join-Path $root "code-train\train-KLCN\output"
+$vaModelDir = Join-Path $vaModelRoot "roberta_va_regression"
 $viModelRoot = Join-Path $root "code-train\train-KLCN\output\vietnamese-emotion"
 $modelHash = "EA865317D9EB7CF1B39008062276BAE441801A7D719D33177A3DDD1851AF7B09"
 $apiPort = 5170
@@ -128,6 +130,40 @@ function Invoke-Readiness([string]$Uri, [int]$TimeoutSeconds, [string]$ExpectedV
         }
     }
     throw "Readiness timeout for $Uri after $TimeoutSeconds seconds. Last error: $lastError"
+}
+
+function Get-ModelSelection([string]$MarkerPath, [string]$FallbackVersion = "") {
+    $lifecyclePath = $MarkerPath + ".lifecycle.json"
+    $controlled = $false
+    $version = $FallbackVersion
+    if (Test-Path -LiteralPath $lifecyclePath) {
+        $state = Get-Content -LiteralPath $lifecyclePath -Raw | ConvertFrom-Json
+        if (-not $state.PSObject.Properties["revision"] -or -not $state.PSObject.Properties["active_version"]) {
+            throw "Invalid model lifecycle state: $lifecyclePath"
+        }
+        $version = [string]$state.active_version
+        $controlled = $true
+    }
+    elseif (Test-Path -LiteralPath $MarkerPath) {
+        $version = (Get-Content -LiteralPath $MarkerPath -Raw).Trim()
+        $controlled = $true
+    }
+    $disabled = $controlled -and (-not $version -or $version -eq "none")
+    if ($version -and -not $disabled -and $version -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{2,79}$') {
+        throw "Invalid selected model version. Review $MarkerPath; it was not overwritten."
+    }
+    return [pscustomobject]@{ Version = $(if ($disabled) { "" } else { $version }); Disabled = $disabled; Controlled = $controlled }
+}
+
+function Test-VaCandidate([string]$CandidateDirectory, [string]$Version) {
+    $checkpoint = Join-Path $CandidateDirectory ($Version + ".pt")
+    if (-not (Test-Path -LiteralPath $checkpoint)) { $checkpoint = Join-Path $CandidateDirectory "model.pt" }
+    $legacy = (Test-Path -LiteralPath $checkpoint) -and (Test-Path -LiteralPath (Join-Path $CandidateDirectory "tokenizer\tokenizer.json"))
+    $six = (Test-Path -LiteralPath (Join-Path $CandidateDirectory "best_model\model.safetensors")) -and
+        (Test-Path -LiteralPath (Join-Path $CandidateDirectory "best_model\tokenizer.json")) -and
+        (Test-Path -LiteralPath (Join-Path $CandidateDirectory "label_config.json")) -and
+        (Test-Path -LiteralPath (Join-Path $CandidateDirectory "manifest.json"))
+    return $legacy -or $six
 }
 
 function Start-HiddenProcess(
@@ -249,12 +285,13 @@ function Show-Status {
             Write-Output "Port ${port}: closed"
         }
     }
-    try {
-        $runtime = Invoke-RestMethod -Uri "$($aiUrl)health/ready" -TimeoutSec 3
-        Write-Output "Inference: Ready; model=$($runtime.model_version); device=$($runtime.inference_device) ($($runtime.device_name))"
-    }
-    catch {
-        Write-Output "Inference: unavailable"
+    foreach ($runtimePath in @("health/ready", "health/va/ready", "health/vi/ready")) {
+        $runtimeName = switch ($runtimePath) { "health/ready" { "Legacy classifier" }; "health/va/ready" { "English model" }; default { "Vietnamese model" } }
+        try {
+            $runtime = Invoke-RestMethod -Uri "$($aiUrl)$runtimePath" -TimeoutSec 3
+            Write-Output "${runtimeName}: Ready; model=$($runtime.model_version); type=$($runtime.model_type); device=$($runtime.inference_device)"
+        }
+        catch { Write-Output "${runtimeName}: unavailable or disabled" }
     }
     try {
         $null = Invoke-WebRequest -Uri "$apiUrl/swagger/v1/swagger.json" -TimeoutSec 3 -UseBasicParsing
@@ -352,12 +389,19 @@ try {
     if (-not $WithoutAI) {
         $python = Join-Path $aiDir ".venv\Scripts\python.exe"
         $artifact = Join-Path $modelDir "model.safetensors"
-        $vaArtifact = Join-Path $vaModelDir "roberta_va_regression.pt"
-        $vaTokenizer = Join-Path $vaModelDir "tokenizer\tokenizer.json"
-        $hasEmotionModel = Test-Path -LiteralPath $artifact
-        $hasVaModel = (Test-Path -LiteralPath $vaArtifact) -and (Test-Path -LiteralPath $vaTokenizer)
-        if (-not (Test-Path -LiteralPath $python) -or (-not $hasEmotionModel -and -not $hasVaModel)) {
-            throw "The AI virtual environment and at least one model artifact are required. See ai-service\README.md."
+        $vaSelection = Get-ModelSelection (Join-Path $stateDir "va-active-model.txt") "roberta_va_regression"
+        $viSelection = Get-ModelSelection (Join-Path $stateDir "vi-active-model.txt")
+        if ($vaSelection.Version) { $vaModelDir = Join-Path $vaModelRoot $vaSelection.Version }
+        $hasEmotionModel = (Test-Path -LiteralPath $artifact) -and -not $WithoutLegacyClassifier
+        $hasVaModel = -not $vaSelection.Disabled -and (Test-VaCandidate $vaModelDir $vaSelection.Version)
+        if ($vaSelection.Controlled -and -not $vaSelection.Disabled -and -not $hasVaModel) {
+            throw "Selected English model artifacts are missing. Restore $($vaSelection.Version); the active selection was not changed."
+        }
+        $availableCandidates = @(Get-ChildItem -LiteralPath $vaModelRoot -Directory -ErrorAction SilentlyContinue | Where-Object {
+            Test-VaCandidate $_.FullName $_.Name
+        })
+        if (-not (Test-Path -LiteralPath $python) -or (-not $hasEmotionModel -and -not $hasVaModel -and $availableCandidates.Count -eq 0)) {
+            throw "The AI virtual environment and model assets are required. Run git lfs pull for the packaged weights; see ai-service\README.md."
         }
         $freeRamMiB = [math]::Floor((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1024)
         $minimumRamMiB = if ($hasEmotionModel -and $hasVaModel) { 3500 } elseif ($hasEmotionModel) { 2500 } else { 1800 }
@@ -388,9 +432,7 @@ try {
             MODEL_SHA256 = $modelHash
             MODEL_DIR = $modelDir
             VA_MODEL_DIR = $vaModelDir
-            VA_CHECKPOINT = $vaArtifact
-            VA_TOKENIZER_DIR = (Join-Path $vaModelDir "tokenizer")
-            VA_MODELS_ROOT = (Join-Path $root "code-train\train-KLCN\output")
+            VA_MODELS_ROOT = $vaModelRoot
             VA_ACTIVE_MODEL_FILE = (Join-Path $stateDir "va-active-model.txt")
             VI_MODEL_ENABLED = "true"
             VI_MODELS_ROOT = $viModelRoot
@@ -400,6 +442,7 @@ try {
             -Arguments "-m uvicorn main:app --host 127.0.0.1 --port $aiPort --workers 1" `
             -WorkingDirectory $aiDir -Port $aiPort -CommandMatch "uvicorn main:app" `
             -Environment $inferenceEnvironment
+        Invoke-Readiness "$($aiUrl)health/live" 60 | Out-Null
         if ($hasEmotionModel) {
             $runtime = Invoke-Readiness "$($aiUrl)health/ready" 240 "roberta_large_asl_en_01"
             if ($runtime.artifact_hash -ne $modelHash.ToLowerInvariant()) {
@@ -408,29 +451,15 @@ try {
             Write-Output "Emotion inference ready: $($runtime.model_version), $($runtime.inference_device) ($($runtime.device_name))."
         }
         if ($hasVaModel) {
-            $activeVaVersion = "roberta_va_regression"
-            $activeVaFile = Join-Path $stateDir "va-active-model.txt"
-            if (Test-Path -LiteralPath $activeVaFile) {
-                $savedVaVersion = (Get-Content -LiteralPath $activeVaFile -Raw).Trim()
-                $candidateDir = Join-Path (Join-Path $root "code-train\train-KLCN\output") $savedVaVersion
-                $candidateCheckpoint = Join-Path $candidateDir ($savedVaVersion + ".pt")
-                if (-not (Test-Path -LiteralPath $candidateCheckpoint)) { $candidateCheckpoint = Join-Path $candidateDir "model.pt" }
-                $candidateTokenizer = Join-Path $candidateDir "tokenizer\tokenizer.json"
-                if ($savedVaVersion -match '^[A-Za-z0-9][A-Za-z0-9_-]{2,79}$' -and
-                    (Test-Path -LiteralPath $candidateCheckpoint) -and (Test-Path -LiteralPath $candidateTokenizer)) {
-                    $activeVaVersion = $savedVaVersion
-                }
-            }
-            $vaRuntime = Invoke-Readiness "$($aiUrl)health/va/ready" 240 $activeVaVersion
-            Write-Output "Valence/arousal inference ready: $($vaRuntime.model_version), $($vaRuntime.inference_device)."
+            $vaRuntime = Invoke-Readiness "$($aiUrl)health/va/ready" 240 $vaSelection.Version
+            Write-Output "English inference ready: $($vaRuntime.model_version), $($vaRuntime.inference_device)."
         }
-        $viActiveFile = Join-Path $stateDir "vi-active-model.txt"
-        if (Test-Path -LiteralPath $viActiveFile) {
-            $viVersion = (Get-Content -LiteralPath $viActiveFile -Raw).Trim()
-            if ($viVersion -match '^[A-Za-z0-9][A-Za-z0-9_-]{2,79}$') {
-                $viRuntime = Invoke-Readiness "$($aiUrl)health/vi/ready" 240 $viVersion
-                Write-Output "Vietnamese emotion inference ready: $($viRuntime.model_version), $($viRuntime.inference_device)."
-            }
+        else {
+            Write-Output "English runtime is inactive; stored candidates are available in AI Engineer. No candidate was auto-activated."
+        }
+        if ($viSelection.Version) {
+            $viRuntime = Invoke-Readiness "$($aiUrl)health/vi/ready" 240 $viSelection.Version
+            Write-Output "Vietnamese inference ready: $($viRuntime.model_version), $($viRuntime.inference_device)."
         }
         $inferenceListener = Get-Listener $aiPort
         if (-not $inferenceListener) {

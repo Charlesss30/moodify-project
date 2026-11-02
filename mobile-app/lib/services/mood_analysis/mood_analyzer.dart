@@ -45,6 +45,10 @@ class MoodAnalysisResult {
     this.mappingMethod,
     this.reasonCode,
     this.expiresAt,
+    this.modelType,
+    this.taxonomy,
+    this.calibrationStatus,
+    this.modelAccepted,
   });
 
   final MoodAnalysisStatus status;
@@ -66,6 +70,10 @@ class MoodAnalysisResult {
   final String? mappingMethod;
   final String? reasonCode;
   final DateTime? expiresAt;
+  final String? modelType;
+  final String? taxonomy;
+  final String? calibrationStatus;
+  final bool? modelAccepted;
 
   MoodAnalysisResult withMood(Mood mood) => MoodAnalysisResult(
     status: MoodAnalysisStatus.matched,
@@ -84,6 +92,10 @@ class MoodAnalysisResult {
     decisionCandidates: decisionCandidates,
     language: language,
     usesVaModel: usesVaModel,
+    modelType: modelType,
+    taxonomy: taxonomy,
+    calibrationStatus: calibrationStatus,
+    modelAccepted: modelAccepted,
     mappingMethod: 'manual_choice',
   );
 
@@ -105,6 +117,10 @@ class MoodAnalysisResult {
     decisionCandidates: decisionCandidates,
     language: language,
     usesVaModel: usesVaModel,
+    modelType: modelType,
+    taxonomy: taxonomy,
+    calibrationStatus: calibrationStatus,
+    modelAccepted: modelAccepted,
     mappingMethod: mappingMethod,
     reasonCode: reasonCode,
   );
@@ -186,8 +202,12 @@ class MoodAnalysisResult {
     if (accepted && (valence == null || arousal == null)) invalid();
     double? confidence;
     final candidates = <MoodAnalysisCandidate>[];
-    if (language == 'vi' && version != null) {
-      const labels = {
+    final sixClass = json['taxonomy'] == 'moodify-six-v1';
+    final classification =
+        language == 'vi' ||
+        json['modelType'] == 'emotion_classification_va_adapter';
+    if (classification && version != null) {
+      const legacyLabels = {
         'Anger',
         'Disgust',
         'Enjoyment',
@@ -196,6 +216,24 @@ class MoodAnalysisResult {
         'Sadness',
         'Surprise',
       };
+      const sixLabels = {
+        'Sadness',
+        'Enjoyment',
+        'Love',
+        'Anger',
+        'Fear',
+        'Surprise',
+      };
+      final labels = sixClass ? sixLabels : legacyLabels;
+      final rawModelAccepted = json['modelAccepted'];
+      if ((language == 'en' && !sixClass) ||
+          (json['taxonomy'] != null &&
+              json['taxonomy'] != 'moodify-six-v1' &&
+              json['taxonomy'] != 'vsmec-seven-v1') ||
+          (rawModelAccepted != null && rawModelAccepted is! bool) ||
+          (accepted && rawModelAccepted == false)) {
+        invalid();
+      }
       final rawConfidence = json['confidence'];
       final rawCandidates = json['emotionCandidates'];
       if (json['modelType'] != 'emotion_classification_va_adapter' ||
@@ -265,6 +303,16 @@ class MoodAnalysisResult {
       analyzerVersion: version is String ? version : 'unknown',
       language: language is String ? language : null,
       usesVaModel: true,
+      modelType: json['modelType'] is String
+          ? json['modelType'] as String
+          : null,
+      taxonomy: json['taxonomy'] is String ? json['taxonomy'] as String : null,
+      calibrationStatus: json['calibrationStatus'] is String
+          ? json['calibrationStatus'] as String
+          : null,
+      modelAccepted: json['modelAccepted'] is bool
+          ? json['modelAccepted'] as bool
+          : null,
       mappingMethod: json['mappingMethod'] is String
           ? json['mappingMethod'] as String
           : null,

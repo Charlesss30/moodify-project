@@ -1,0 +1,14 @@
+{
+  "test_mt": {
+    "n": 2000,
+    "accuracy": 0.857,
+    "macro_f1": 0.8107988944100111,
+    "interpretation": "Machine-translated test; consistency check, not real Vietnamese quality."
+  },
+  "test_vsmec_5cls": {
+    "n": 432,
+    "accuracy": 0.7939814814814815,
+    "macro_f1": 0.6418010436595553,
+    "interpretation": "Real Vietnamese social-media test, five source classes mapped to six model classes; below 85% accuracy target."
+  }
+}

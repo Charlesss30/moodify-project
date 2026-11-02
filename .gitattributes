@@ -1,0 +1,4 @@
+# Preserve exact tokenizer/metadata bytes used by bundle fingerprints.
+code-train/train-KLCN/output/** -text whitespace=cr-at-eol
+code-train/train-KLCN/output/**/*.safetensors filter=lfs diff=lfs merge=lfs -text
+code-train/train-KLCN/output/**/*.bin filter=lfs diff=lfs merge=lfs -text

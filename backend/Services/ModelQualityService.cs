@@ -13,6 +13,7 @@ namespace mood_recommendation.Services;
 
 public class NlpQualityPolicyInput {
     [Required,RegularExpression("^(vi|va)$")]public string Kind{get;set;}="";
+    [RegularExpression("^(vsmec7|va_regression|emotion6_en|emotion6_vi)$")]public string? TaskType{get;set;}
     [Range(20,60000)]public int MinimumValidationSamples{get;set;}=50;
     [Range(20,60000)]public int MinimumTestSamples{get;set;}=50;
     [Range(0,1)]public double MinimumMacroF1{get;set;}=.55;
@@ -29,6 +30,7 @@ public sealed class NlpFingerprintFile { public string Path{get;set;}="";public 
 public sealed class NlpFingerprint {
     public string Kind{get;set;}="";public string Version{get;set;}="";public string BundleSha256{get;set;}="";
     public string WeightSha256{get;set;}="";public List<NlpFingerprintFile> Files{get;set;}=[];
+    public string? Taxonomy{get;set;}
     public bool Active{get;set;}public string? ActiveBundleSha256{get;set;}
 }
 public sealed class NlpQualityApproval {
@@ -56,11 +58,12 @@ public sealed class ModelQualityService(MongoStore db,IHttpClientFactory clients
         return result is not null&&result.Kind==kind&&result.Version==version&&Hash(result.BundleSha256)&&Hash(result.WeightSha256)
             &&result.Files is {Count:>0}&&result.Files.All(f=>f is not null&&Hash(f.Sha256))?result:null;
     }
+    public static string PolicyTask(NlpQualityPolicyInput policy)=>policy.TaskType??(policy.Kind=="vi"?"vsmec7":"va_regression");
     public static bool MetricsPass(NlpQualityPolicy p,IReadOnlyDictionary<string,double>? metrics) {
         if(metrics is null||metrics.Any(x=>!double.IsFinite(x.Value)))return false;
         bool AtLeast(string key,double threshold)=>metrics.TryGetValue(key,out var value)&&value>=threshold&&value<=1;
         bool AtMost(string key,double threshold)=>metrics.TryGetValue(key,out var value)&&value>=0&&value<=threshold;
-        return p.Kind=="vi" ? AtLeast("macroF1",p.MinimumMacroF1)&&AtLeast("coverage",p.MinimumCoverage)
+        return PolicyTask(p)!="va_regression" ? AtLeast("macroF1",p.MinimumMacroF1)&&AtLeast("coverage",p.MinimumCoverage)
                 &&AtLeast("selectiveAccuracy",p.MinimumSelectiveAccuracy)
             : AtMost("valenceMae",p.MaximumMae)&&AtMost("arousalMae",p.MaximumMae)
                 &&AtMost("valenceRmse",p.MaximumRmse)&&AtMost("arousalRmse",p.MaximumRmse);
@@ -72,12 +75,19 @@ public sealed class ModelQualityService(MongoStore db,IHttpClientFactory clients
             if(entry is null||string.IsNullOrWhiteSpace(entry.Path)||entry.Path.Length>500||!Hash(entry.Sha256))return false;
             var key=entry.Path.Replace('\\','/');
             if(key.StartsWith('/')||key.Contains(':')||key.Split('/').Any(p=>p is ".." or "."))return false;
-            if(kind=="vi"&&key.StartsWith("model/",StringComparison.Ordinal))key=key[6..];
+            // Preserve the stored package-relative path for six-class bundles. Legacy
+            // Vietnamese reports may include model/ while their fingerprint is rooted inside it.
+            if(kind=="vi"&&!fingerprint.Files.Any(f=>f.Path.StartsWith("model/",StringComparison.Ordinal))
+                &&key.StartsWith("model/",StringComparison.Ordinal))key=key[6..];
             if(!files.TryAdd(key,entry.Sha256))return false;
         }
         return fingerprint.Files.All(f=>files.TryGetValue(f.Path,out var hash)&&hash.Equals(f.Sha256,StringComparison.OrdinalIgnoreCase));
     }
     public async Task<RegistryOperation> CreatePolicyAsync(NlpQualityPolicyInput input,int actor,CancellationToken ct) {
+        var task=PolicyTask(input);
+        if((input.Kind=="vi"&&task is not ("vsmec7" or "emotion6_vi"))
+            ||(input.Kind=="va"&&task is not ("va_regression" or "emotion6_en")))
+            return new(400,new{message="Quality criteria must match the model task and language."});
         var policy=JsonSerializer.Deserialize<NlpQualityPolicy>(JsonSerializer.Serialize(input,Json),Json)!;
         policy.Id=Guid.NewGuid().ToString("N");policy.ActorId=actor;policy.CreatedAt=DateTime.UtcNow;
         await Policies.InsertOneAsync(policy,cancellationToken:ct);
@@ -91,8 +101,8 @@ public sealed class ModelQualityService(MongoStore db,IHttpClientFactory clients
             return new(409,new{message="Choose a bilingual evaluation job with a submitted report and a policy fixed before execution."});
         var data=await db.Database.GetCollection<ExperimentDataset>("aiTypedDatasets").Find(d=>d.Id==job.DatasetId).FirstAsync(ct);
         var policy=await Policies.Find(p=>p.Id==job.QualityPolicyId).FirstOrDefaultAsync(ct);
-        var kind=job.TaskType=="vsmec7"?"vi":"va";
-        if(data.Purpose!="evaluation"||!data.IndependentEvaluation||policy is null||policy.Kind!=kind||policy.CreatedAt>job.CreatedAt
+        var kind=data.Language=="vi"?"vi":"va";
+        if(data.Purpose!="evaluation"||!data.IndependentEvaluation||policy is null||policy.Kind!=kind||PolicyTask(policy)!=job.TaskType||policy.CreatedAt>job.CreatedAt
             ||job.Report.SubmittedAt<=job.CreatedAt||data.Splits.GetValueOrDefault("validation")<policy.MinimumValidationSamples
             ||data.Splits.GetValueOrDefault("test")<policy.MinimumTestSamples
             ||!MetricsPass(policy,job.Report.ValidationMetrics)||!MetricsPass(policy,job.Report.Metrics))
@@ -100,7 +110,8 @@ public sealed class ModelQualityService(MongoStore db,IHttpClientFactory clients
         NlpFingerprint? fingerprint;
         try{fingerprint=await FingerprintAsync(kind,job.ModelVersion,ct);}
         catch(Exception e)when(e is HttpRequestException or JsonException or TaskCanceledException){return new(503,new{message="Candidate fingerprint is unavailable; activation remains blocked."});}
-        if(fingerprint is null||!job.Report.ArtifactHash.Equals(fingerprint.WeightSha256,StringComparison.OrdinalIgnoreCase)
+        if(fingerprint is null||((job.TaskType is "emotion6_en" or "emotion6_vi")!=(fingerprint.Taxonomy=="moodify-six-v1"))
+            ||!job.Report.ArtifactHash.Equals(fingerprint.WeightSha256,StringComparison.OrdinalIgnoreCase)
             ||!ManifestMatches(job.Report,fingerprint,kind)||!job.Report.BundleSha256.Equals(fingerprint.BundleSha256,StringComparison.OrdinalIgnoreCase))
             return new(409,new{message="Stored weights/tokenizer/preprocessing do not match the evaluated artifact manifest."});
         var approval=new NlpQualityApproval{Id=Guid.NewGuid().ToString("N"),Kind=kind,Version=job.ModelVersion,

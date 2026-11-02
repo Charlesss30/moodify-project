@@ -31,7 +31,7 @@ public static class AiCompletionTests
         var pipeline=await call("GET","/AiWorkspace/pipelines",null,200,engineer);
         check(pipeline!["policies"]![0]!["mappingVersion"]!.GetValue<string>()==policy,"Dashboard reported stale policy.");
         await call("POST","/AiPolicies/vi/reset",new{expectedRevision=1},200,engineer);
-        await call("POST","/AiPolicies",new{language="en",moodIds=new[]{moodId},minimumConfidence=.5,reason="Invalid regression threshold fixture"},400,engineer);
+        await call("POST","/AiPolicies",new{language="en",moodIds=new[]{moodId},minimumConfidence=.5,reason="Reviewed English classifier confidence floor fixture"},201,engineer);
         await call("POST","/AiPolicies",new{language="vi",moodIds=new[]{int.MaxValue},minimumConfidence=0,reason="Missing target fixture"},400,engineer);
         check((await call("GET","/AiPolicies/metrics",null,200,engineer))!.AsArray().Any(x=>x!["language"]!.GetValue<string>()=="vi"),"Inference metrics omitted VI.");
         await call("GET","/AiPolicies/metrics",null,403,user);

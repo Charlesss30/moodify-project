@@ -262,8 +262,8 @@ public static class SemanticMoodMapper
             &&(key is "Happy" or "Excited" or "Relaxed" or "Romantic"&&v<-.2||key=="Sad"&&v>.2))
             return new(null,"needs_clarification","model_context_conflict");
         if(context.Status is "none" or "negated") {
-            method=context.Status=="negated"?"model_negation":language=="vi"?"model_emotion":"model_va_general";
-            if(language=="vi")key=emotion switch {"Enjoyment"=>"Happy","Sadness"=>"Sad",_=>null};
+            method=context.Status=="negated"?"model_negation":emotion is not null?"model_emotion":"model_va_general";
+            if(emotion is not null)key=emotion switch {"Enjoyment"=>"Happy","Sadness"=>"Sad",_=>null};
             else {
                 // VA alone cannot imply romance, memories, or concentration.
                 var general=eligible.Where(m=>Canonical(m.TenTamTrang) is "Happy" or "Sad" or "Relaxed" or "Excited")

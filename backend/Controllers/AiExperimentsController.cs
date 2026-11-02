@@ -27,7 +27,7 @@ public sealed class ExperimentDataset {
 }
 public sealed class ExperimentDatasetInput {
     [Required,StringLength(100,MinimumLength=2)]public string Name{get;set;}="";
-    [Required,RegularExpression("^(vsmec7|va_regression|recommender)$")]public string TaskType{get;set;}="";
+    [Required,RegularExpression("^(vsmec7|va_regression|emotion6_en|emotion6_vi|recommender)$")]public string TaskType{get;set;}="";
     [Required,RegularExpression("^(vi|en|none)$")]public string Language{get;set;}="";
     [RegularExpression("^(training|evaluation)$")]public string Purpose{get;set;}="training";
     public bool IndependentEvaluation{get;set;}
@@ -65,6 +65,9 @@ public sealed class AiExperimentsController(MongoStore db,BilingualPolicyService
 {
     static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
     static readonly HashSet<string> Labels=new(["Anger","Disgust","Enjoyment","Fear","Other","Sadness","Surprise"]);
+    static readonly HashSet<string> SixLabels=new(["Sadness","Enjoyment","Love","Anger","Fear","Surprise"]);
+    static bool Classifier(string task)=>task is "vsmec7" or "emotion6_en" or "emotion6_vi";
+    static string Pipeline(string task)=>task is "vsmec7" or "emotion6_vi"?"vi":"va";
     int Actor=>int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     IMongoCollection<ExperimentDataset> Datasets=>db.Database.GetCollection<ExperimentDataset>("aiTypedDatasets");
     IMongoCollection<ExperimentJob> Jobs=>db.Database.GetCollection<ExperimentJob>("aiTypedJobs");
@@ -76,7 +79,7 @@ public sealed class AiExperimentsController(MongoStore db,BilingualPolicyService
     [HttpPost("datasets"),RequestSizeLimit(16_000_000)]
     public async Task<IActionResult> Dataset(ExperimentDatasetInput input,CancellationToken ct)
     {
-        if((input.TaskType=="vsmec7"&&input.Language!="vi")||(input.TaskType=="va_regression"&&input.Language!="en")||(input.TaskType=="recommender"&&input.Language!="none"))
+        if((input.TaskType is "vsmec7" or "emotion6_vi"&&input.Language!="vi")||(input.TaskType is "va_regression" or "emotion6_en"&&input.Language!="en")||(input.TaskType=="recommender"&&input.Language!="none"))
             return BadRequest(new{message="Task and language mismatch."});
         if(input.Purpose=="evaluation"&&input.TaskType=="recommender")return BadRequest(new{message="Use the temporal MF evaluation workflow."});
         var moodIds=(await db.TamTrangs.Select(x=>x.TamTrangID).ToListAsync(ct)).ToHashSet();
@@ -89,8 +92,8 @@ public sealed class AiExperimentsController(MongoStore db,BilingualPolicyService
                 var key=string.Join(' ',text.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
                 if(text.Length is <1 or >4000||!texts.Add(key)||row.UserId is not null||row.Stars is not null||row.ContentId is not null||row.Timestamp is not null)
                     return BadRequest(new{message="Invalid text, private recommender fields, or duplicate/cross-split leakage."});
-                if(input.TaskType=="vsmec7"&&(!Labels.Contains(row.Emotion??"")||(input.Purpose=="training"&&(row.Valence is not null||row.Arousal is not null||row.MoodId is not null))))
-                    return BadRequest(new{message="VSMEC requires one of seven emotion labels, not fabricated VA labels."});
+                if(Classifier(input.TaskType)&&(!(input.TaskType=="vsmec7"?Labels:SixLabels).Contains(row.Emotion??"")||(input.Purpose=="training"&&(row.Valence is not null||row.Arousal is not null||row.MoodId is not null))))
+                    return BadRequest(new{message="Classification requires one exact label from its taxonomy; training rows cannot contain fabricated VA labels."});
                 if(input.Purpose=="evaluation"&&((row.MoodId is not null&&!moodIds.Contains(row.MoodId.Value))
                     ||((row.Valence is not null||row.Arousal is not null)&&(!Coordinate(row.Valence)||!Coordinate(row.Arousal)))))
                     return BadRequest(new{message="Evaluation VA and optional mood IDs must be valid independently reviewed labels."});
@@ -128,7 +131,7 @@ public sealed class AiExperimentsController(MongoStore db,BilingualPolicyService
         NlpQualityPolicy? qualityPolicy=null;
         if(!string.IsNullOrEmpty(input.QualityPolicyId)){
             qualityPolicy=await db.Database.GetCollection<NlpQualityPolicy>("aiNlpQualityPolicies").Find(p=>p.Id==input.QualityPolicyId).FirstOrDefaultAsync(ct);
-            if(qualityPolicy is null||d.Purpose!="evaluation"||qualityPolicy.Kind!=(d.TaskType=="vsmec7"?"vi":"va"))
+            if(qualityPolicy is null||d.Purpose!="evaluation"||qualityPolicy.Kind!=Pipeline(d.TaskType)||ModelQualityService.PolicyTask(qualityPolicy)!=d.TaskType)
                 return BadRequest(new{message="Choose a compatible quality policy for an evaluation-only dataset."});
         }
         var moods=await db.TamTrangs.ToListAsync(ct);
@@ -161,7 +164,7 @@ public sealed class AiExperimentsController(MongoStore db,BilingualPolicyService
         if(input.ArtifactFiles is null||input.ArtifactFiles.Count>500||input.ValidationMetrics is null||input.ValidationMetrics.Count>30
             ||input.Metrics is null||input.Metrics.Count>30||input.ValidationMetrics.Any(m=>!double.IsFinite(m.Value)))
             return BadRequest(new{message="Evaluation metadata exceeds bounds or contains invalid numbers."});
-        var required=j.TaskType=="vsmec7"?new[]{"macroF1","coverage"}:j.TaskType=="va_regression"?new[]{"valenceMae","valenceRmse","arousalMae","arousalRmse"}:new[]{"rmse","ndcg"};
+        var required=Classifier(j.TaskType)?new[]{"macroF1","coverage"}:j.TaskType=="va_regression"?new[]{"valenceMae","valenceRmse","arousalMae","arousalRmse"}:new[]{"rmse","ndcg"};
         if(input.Metrics is null||required.Any(k=>!input.Metrics.ContainsKey(k))||input.Metrics.Any(x=>!double.IsFinite(x.Value)||x.Value<0
             ||x.Value>(x.Key.Contains("Mae")||x.Key.Contains("Rmse")||x.Key=="rmse"?2:1)))
             return BadRequest(new{message="Metrics must match the model task and supported numeric ranges."});

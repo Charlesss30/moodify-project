@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from threading import BoundedSemaphore
 
+from emotion_bundle import describe_bundle, fingerprint_bundle
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
@@ -41,6 +43,9 @@ def va_candidate(version: str) -> tuple[Path, Path]:
     folder = root / version
     if folder.is_symlink() or not folder.is_dir() or folder.resolve().parent != root:
         raise FileNotFoundError("Model version is not an available local candidate.")
+    if (folder / "best_model" / "config.json").is_file():
+        describe_bundle(folder, "en", version)
+        return folder, folder / "best_model"
     checkpoint = folder / f"{version}.pt"
     if not checkpoint.is_file() or checkpoint.is_symlink():
         checkpoint = folder / "model.pt"
@@ -64,8 +69,10 @@ def va_candidates() -> list[dict]:
             checkpoint, tokenizer = va_candidate(folder.name)
         except (ValueError, FileNotFoundError):
             continue
-        candidates.append({"model_version": folder.name, "checkpoint": checkpoint.name,
-                           "tokenizer_available": (tokenizer / "tokenizer.json").is_file()})
+        candidates.append({"model_version": folder.name, "checkpoint": (("model.safetensors" if (tokenizer / "model.safetensors").is_file() else "pytorch_model.bin") if checkpoint.is_dir() else checkpoint.name),
+                           "tokenizer_available": (tokenizer / "tokenizer.json").is_file(),
+                           **(describe_bundle(checkpoint, "en", folder.name) if checkpoint.is_dir() else
+                              {"model_type": "valence_arousal_regression", "taxonomy": None, "labels": []})})
     return candidates
 
 
@@ -118,7 +125,10 @@ def vi_candidates() -> list[dict]:
         except (ValueError, FileNotFoundError):
             continue
         weight = next((name for name in ("model.safetensors", "pytorch_model.bin", "model.pt") if (model_dir / name).is_file()), "")
-        items.append({"model_version": folder.name, "checkpoint": weight, "tokenizer_available": (model_dir / "tokenizer_config.json").is_file()})
+        items.append({"model_version": folder.name, "checkpoint": weight, "tokenizer_available": (model_dir / "tokenizer_config.json").is_file(),
+                      **(describe_bundle(folder, "vi", folder.name) if (folder / "label_config.json").is_file() else
+                         {"model_type": "emotion_classification_va_adapter", "taxonomy": "vsmec-seven-v1",
+                          "labels": ["Anger", "Disgust", "Enjoyment", "Fear", "Other", "Sadness", "Surprise"]})})
     return items
 
 
@@ -137,6 +147,30 @@ def active_vi_version() -> str | None:
         return version
     except (OSError, ValueError, FileNotFoundError):
         return None
+
+
+def _load_va_predictor(checkpoint, tokenizer, version):
+    if checkpoint.is_dir():
+        from emotion_predictor import EnglishEmotionPredictor
+        return EnglishEmotionPredictor(checkpoint, version)
+    from va_predictor import ValenceArousalPredictor
+    return ValenceArousalPredictor(checkpoint, tokenizer, version)
+
+
+def _load_vi_predictor(model_dir, version):
+    if (model_dir.parent / "label_config.json").is_file():
+        from emotion_predictor import VietnameseSixEmotionPredictor
+        return VietnameseSixEmotionPredictor(model_dir.parent, version)
+    from vietnamese_predictor import VietnameseEmotionPredictor
+    return VietnameseEmotionPredictor(model_dir, version)
+
+
+def predictor_metadata(predictor, language):
+    classification = language == "vi" or getattr(predictor, "model_type", "") == "emotion_classification_va_adapter"
+    return {"model_type": "emotion_classification_va_adapter" if classification else "valence_arousal_regression",
+            "taxonomy": getattr(predictor, "taxonomy", "vsmec-seven-v1" if language == "vi" else None),
+            "labels": getattr(predictor, "labels", getattr(predictor, "LABELS", [])),
+            "calibration_status": getattr(predictor, "calibration_status", "legacy_default" if classification else "not_applicable")}
 
 
 @asynccontextmanager
@@ -163,11 +197,10 @@ async def lifespan(app: FastAPI):
             logger.error("Model is not ready (%s).", type(error).__name__)
     if os.environ.get("VA_MODEL_ENABLED", "").lower() == "true" and not disabled_by_operator("va"):
         try:
-            from va_predictor import ValenceArousalPredictor
 
             version = active_va_version() or Path(os.environ.get("VA_MODEL_DIR", str(_default_va_dir))).name
             checkpoint, tokenizer_dir = va_candidate(version)
-            app.state.va_predictor = verify_loaded_identity("va", ValenceArousalPredictor(checkpoint, tokenizer_dir, version))
+            app.state.va_predictor = verify_loaded_identity("va", _load_va_predictor(checkpoint, tokenizer_dir, version))
             app.state.va_active_version = version
         except Exception as error:
             app.state.va_load_error = type(error).__name__
@@ -176,9 +209,8 @@ async def lifespan(app: FastAPI):
         version = active_vi_version()
         if version:
             try:
-                from vietnamese_predictor import VietnameseEmotionPredictor
 
-                app.state.vi_predictor = verify_loaded_identity("vi", VietnameseEmotionPredictor(vi_candidate(version), version))
+                app.state.vi_predictor = verify_loaded_identity("vi", _load_vi_predictor(vi_candidate(version), version))
                 app.state.vi_active_version = version
             except Exception as error:
                 app.state.vi_load_error = type(error).__name__
@@ -252,6 +284,7 @@ def va_ready():
         "model_version": predictor.model_version,
         "language": "en",
         "inference_device": predictor.device,
+        **predictor_metadata(predictor, "en"),
     }
 
 
@@ -292,7 +325,8 @@ def vi_ready():
         raise HTTPException(status_code=503, detail="Vietnamese emotion model is unavailable.")
     return {"status": "ready", "model_version": predictor.model_version, "language": "vi", "inference_device": predictor.device,
             "preprocessing_status": getattr(predictor, "preprocessing_status", "unknown"),
-            "preprocessing_sha256": getattr(predictor, "preprocessing_hash", None)}
+            "preprocessing_sha256": getattr(predictor, "preprocessing_hash", None),
+            **predictor_metadata(predictor, "vi")}
 
 
 @app.get("/models/vi")
@@ -370,13 +404,11 @@ def persist_lifecycle(kind, version, previous, bundle=None, previous_bundle=None
 
 def load_candidate(kind, version):
     if kind == "va":
-        from va_predictor import ValenceArousalPredictor
         checkpoint, tokenizer = va_candidate(version)
-        candidate = ValenceArousalPredictor(checkpoint, tokenizer, version)
+        candidate = _load_va_predictor(checkpoint, tokenizer, version)
         smoke = candidate.predict("I feel calm today.")
     else:
-        from vietnamese_predictor import VietnameseEmotionPredictor
-        candidate = VietnameseEmotionPredictor(vi_candidate(version), version)
+        candidate = _load_vi_predictor(vi_candidate(version), version)
         smoke = candidate.predict("Tôi đang cảm thấy vui.")
     import math
     if smoke.get("model_version") != version or smoke.get("language") != ("en" if kind == "va" else "vi") or any(
@@ -480,10 +512,11 @@ def model_fingerprint(kind: str, version: str):
         raise HTTPException(status_code=404, detail="Unknown model pipeline.")
     try:
         if kind == "vi":
-            fingerprint = fingerprint_files(kind, vi_candidate(version), version)
+            model_dir = vi_candidate(version)
+            fingerprint = fingerprint_bundle(model_dir.parent, "vi", version) if (model_dir.parent / "label_config.json").is_file() else fingerprint_files(kind, model_dir, version)
         else:
             checkpoint, _ = va_candidate(version)
-            fingerprint = fingerprint_files(kind, checkpoint.parent, version, checkpoint)
+            fingerprint = fingerprint_bundle(checkpoint, "en", version) if checkpoint.is_dir() else fingerprint_files(kind, checkpoint.parent, version, checkpoint)
     except (ValueError, OSError) as error:
         raise HTTPException(status_code=404, detail="Stored model fingerprint is unavailable.") from error
     predictor = getattr(app.state, kind + "_predictor", None)

@@ -1,0 +1,37 @@
+{
+  "model_version": "phobert_moodify_6c_20261101_053022",
+  "language": "vi",
+  "task": "6-class emotion classification; V/A derived from anchors",
+  "base_model": "vinai/phobert-base-v2",
+  "training_date": "2026-11-01",
+  "weights_file": "model/model.safetensors",
+  "weights_sha256": "9902ea9983e3df7939861454ddc9f27963eafbb45ec1582bd7d8b02be99b3790",
+  "datasets": [
+    {
+      "accuracy": 0.857,
+      "name": "machine-translated dair-ai/emotion",
+      "macro_f1": 0.8107988944100111,
+      "license_status": "review required",
+      "test": "test_mt",
+      "samples": 2000
+    },
+    {
+      "accuracy": 0.7939814814814815,
+      "name": "UIT-VSMEC 5-class subset",
+      "macro_f1": 0.6418010436595553,
+      "license_status": "review required",
+      "test": "test_vsmec_5cls",
+      "samples": 432
+    }
+  ],
+  "max_length": 96,
+  "confidence_threshold": null,
+  "confidence_threshold_status": "not provided; accepted remains null pending calibration",
+  "training_seed": 42,
+  "sample_counts": {
+    "train": 32410,
+    "validation": 2410,
+    "test_mt": 2000,
+    "test_vsmec_5cls": 432
+  }
+}

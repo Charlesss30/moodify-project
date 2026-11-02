@@ -77,3 +77,14 @@ docs/TMDB_DATA_MIGRATION_RESULTS.json
 
 # Private manual label reviews
 docs/ai-evaluation/completed/
+
+# Reviewed six-class release packages; other local training outputs stay private.
+!code-train/train-KLCN/output/
+code-train/train-KLCN/output/*
+!code-train/train-KLCN/output/roberta_base_moodify_6c_20261101_051915/
+!code-train/train-KLCN/output/roberta_base_moodify_6c_20261101_051915/**
+!code-train/train-KLCN/output/vietnamese-emotion/
+code-train/train-KLCN/output/vietnamese-emotion/*
+!code-train/train-KLCN/output/vietnamese-emotion/phobert_moodify_6c_20261101_053022/
+!code-train/train-KLCN/output/vietnamese-emotion/phobert_moodify_6c_20261101_053022/**
+code-train/train-KLCN/output/**/*.rar

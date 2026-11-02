@@ -1,6 +1,6 @@
 # Moodify — Gợi ý phim và âm nhạc theo tâm trạng
 
-Hệ thống gồm Flutter, website Admin/AIEngineer, ASP.NET Core API và Python inference RoBERTa. Dữ liệu nghiệp vụ dùng **MongoDB**, phim tích hợp **TMDB**, nhạc tích hợp **Spotify**. Repo không chứa database cá nhân, file phim/nhạc hay trọng số model.
+Hệ thống gồm Flutter, website Admin/AIEngineer, ASP.NET Core API và Python inference RoBERTa. Dữ liệu nghiệp vụ dùng **MongoDB**, phim tích hợp **TMDB**, nhạc tích hợp **Spotify**. Repo không chứa database cá nhân hoặc file phim/nhạc. Hai bộ weights 6 lớp được phân phối bằng Git LFS; model cũ và dữ liệu huấn luyện cấp riêng.
 
 ## Chức năng
 
@@ -9,7 +9,7 @@ Hệ thống gồm Flutter, website Admin/AIEngineer, ASP.NET Core API và Pytho
 - AIEngineer: AI overview, Models, Emotion mapping, Evaluation, Datasets, Training jobs, Feedback analytics, Inference lab, Recommendations.
 - Recommender: Mood Matching + Content-based + Collaborative Filtering; phản hồi mới cập nhật hồ sơ và thứ hạng ở yêu cầu tiếp theo.
 
-Phân tích mô tả hỗ trợ **tiếng Việt qua PhoBERT** và **tiếng Anh qua RoBERTa VA** khi artifact tương ứng đã được cài, kích hoạt và runtime sẵn sàng. Mobile tự nhận diện ngôn ngữ và hiển thị model dưới ô nhập; Web chọn ngôn ngữ trên form. Người dùng xác nhận mood trước khi lấy gợi ý và có thể chọn mood thủ công. Mapping còn thử nghiệm. Training jobs chuẩn bị notebook Colab/nhận báo cáo, **không tự train GPU trên web**. Feedback Loop không phải Reinforcement Learning.
+Phân tích mô tả hỗ trợ **tiếng Việt qua PhoBERT** và **tiếng Anh qua RoBERTa (hồi quy VA hoặc classifier 6 lớp)** khi artifact tương ứng đã được cài, kích hoạt và runtime sẵn sàng. Mobile tự nhận diện ngôn ngữ và hiển thị model dưới ô nhập; Web chọn ngôn ngữ trên form. Người dùng xác nhận mood trước khi lấy gợi ý và có thể chọn mood thủ công. Mapping còn thử nghiệm. Training jobs chuẩn bị notebook Colab/nhận báo cáo, **không tự train GPU trên web**. Feedback Loop không phải Reinforcement Learning.
 
 ## Cấu trúc repository
 
@@ -125,7 +125,7 @@ $env:VI_ACTIVE_MODEL_FILE = Join-Path $env:LOCALAPPDATA "Moodify/vi-active-model
 
 Nếu đã cài checkpoint VA chuẩn ở `output/roberta_va_regression`, thêm `$env:VA_MODEL_ENABLED = "true"` trước lệnh Uvicorn để nạp cả VA khi khởi động. Model PhoBERT được chọn trong dashboard được lưu tại marker `vi-active-model.txt`; các package `pyvi` và `sentencepiece` phải được cài trong đúng virtualenv qua `pip install -r requirements.txt`.
 
-Readiness của model tiếng Anh: `http://127.0.0.1:8001/health/ready`. Model VA và tiếng Việt cần artifact riêng; pull source code không tự tải weights về. Các lệnh VA nằm ở mục AI bên dưới. Model registry đã activate và runtime sẵn sàng là hai trạng thái riêng.
+Readiness của model tiếng Anh: `http://127.0.0.1:8001/health/ready`. Model VA cũ và PhoBERT 7 lớp cần artifact riêng; hai classifier 6 lớp cần tải weights bằng Git LFS. Các lệnh VA nằm ở mục AI bên dưới. Model registry đã activate và runtime sẵn sàng là hai trạng thái riêng.
 
 Sau khi pull/merge, runner build backend trước khi nạp AI để báo lỗi C# ngay. Thiếu RAM theo ngưỡng khuyến nghị được báo cảnh báo; runner vẫn kiểm tra hash, VRAM và readiness của model.
 
@@ -164,6 +164,9 @@ flutter run -d <device-id> --dart-define=API_BASE_URL=http://192.168.1.100:5170
 
 ## 5. Bật AI
 
+Sau khi pull bản tích hợp Phuong/Khang, chạy `git lfs install` và `git lfs pull` để tải hai weights 6 lớp. Metadata/tokenizer đã nằm trong Git thường. Runner giữ nguyên model active; candidate mới cần đánh giá độc lập và duyệt trước khi kích hoạt. Xem [kết quả tích hợp và hướng dẫn](docs/KHANG_PHUONG_INTEGRATION_2026-11-03.md). Có thể dùng `./Start.ps1 -WithoutLegacyClassifier` để không nạp thêm classifier GoEmotions 28 nhãn, giảm bộ nhớ.
+
+
 Khôi phục artifact được cấp riêng tại `code-train/train-KLCN/output/roberta_large_asl_en_01/`, gồm `best_model`, `deployment`, `run_config.json`. Không chỉ chép model.safetensors. Model VA EmoBank dùng riêng file `code-train/train-KLCN/output/roberta_va_regression/roberta_va_regression.pt` và thư mục `tokenizer`; runner nhận diện model này và cung cấp endpoint riêng. Xem [artifact](code-train/README.md) và [Python environment](ai-service/README.md).
 
 1. Cài `ai-service/.venv`, đặt artifact cần dùng đúng thư mục, chạy `./Start.ps1` không có WithoutAI. VA có thể chạy riêng khi chưa có artifact phân loại cũ.
@@ -177,7 +180,7 @@ Nếu chạy từng terminal chỉ với VA, tạo `ai-service/.venv`, cài `ai-
 
 Mobile và Web gửi `language=auto` tới `POST /api/MoodAnalysis/valence-arousal`. Backend chọn PhoBERT hoặc RoBERTa VA; response ghi `language`, `modelType`, `modelVersion`, `mappingVersion` và trạng thái. Kết quả đủ điều kiện có `analysisId` gắn tài khoản, hiệu lực 5 phút. Khi xác nhận, client gửi mã này với mood và bộ lọc; V/A và phiên bản model được lấy từ kết quả đã lưu ở server. Đổi model/vùng mood hoặc mã hết hạn thì cần phân tích lại. Kết quả dưới ngưỡng không tạo mã xác nhận AI; vẫn chọn mood thủ công được.
 
-AI overview và Inference lab của kỹ sư đã phản ánh hai pipeline này. **GoEmotions mapping** chỉ tác động classifier 28 nhãn cũ. Datasets/Training jobs hiện vẫn dành cho pipeline 28 nhãn; chưa phải trình huấn luyện PhoBERT hoặc VA regression.
+AI overview và Inference lab của kỹ sư đã phản ánh hai pipeline này. **GoEmotions mapping** chỉ tác động classifier 28 nhãn cũ. Datasets/Training jobs có schema riêng cho GoEmotions 28 nhãn, VSMEC 7 lớp, hồi quy VA, classifier 6 lớp EN/VI và MF. Job chuẩn bị bundle để train/evaluate bên ngoài; không tự chạy huấn luyện hoặc triển khai khi tạo job.
 
 Xem [kết quả thực hiện và bằng chứng](docs/AI_SYSTEM_UNIFICATION_RESULTS.md), [checklist còn lại](docs/AI_SYSTEM_UNIFICATION_PLAN.md). Cả backend và Mobile cần được cập nhật cùng phiên bản hợp đồng này; client cũ gửi V/A với `source=ai_va` sẽ nhận HTTP 400 yêu cầu dùng `analysisId`.
 

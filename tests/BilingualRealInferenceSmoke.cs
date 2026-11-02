@@ -49,8 +49,9 @@ public static class BilingualRealInferenceSmoke
         var state=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Moodify");
         var viMarker=Path.Combine(state,"vi-active-model.txt");
         var enMarker=Path.Combine(state,"va-active-model.txt");
-        var viVersion=(await File.ReadAllTextAsync(viMarker)).Trim();
-        var enVersion=(await File.ReadAllTextAsync(enMarker)).Trim();
+        var six=Environment.GetEnvironmentVariable("MOODIFY_SMOKE_SIX")=="true";
+        var viVersion=six?"phobert_moodify_6c_20261101_053022":(await File.ReadAllTextAsync(viMarker)).Trim();
+        var enVersion=six?"roberta_base_moodify_6c_20261101_051915":(await File.ReadAllTextAsync(enMarker)).Trim();
         var isolatedState=Path.Combine(root,".local-build","bilingual-state-"+Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(isolatedState);
         var originalViMarker=viMarker;var originalEnMarker=enMarker;
@@ -120,6 +121,10 @@ public static class BilingualRealInferenceSmoke
                 ("VI-no-accents","hom nay toi thay binh yen va thu gian"),
                 ("VI-mixed","Tôi feel happy but hơi nervous hôm nay"),
                 ("unsupported","今天很开心")});
+            if(six) {
+                foreach(var health in new[]{healthEn,healthVi})
+                    Check(health!["model_type"]!.GetValue<string>()=="emotion_classification_va_adapter"&&health["taxonomy"]!.GetValue<string>()=="moodify-six-v1", "Actual runtime did not load the six-class adapter.");
+            }
             var results=new List<object>();
             foreach(var (id,text) in samples)
             {
@@ -129,6 +134,7 @@ public static class BilingualRealInferenceSmoke
                 if(id!="unsupported")
                     Check(result["language"]!.GetValue<string>()==(id.StartsWith("VI")?"vi":"en"),"Backend routing mismatch: "+id);
                 var matched=result["status"]!.GetValue<string>()=="matched";
+                if(six&&id!="unsupported")Check(result["modelVersion"]!.GetValue<string>()==(id.StartsWith("VI")?viVersion:enVersion),"Gateway did not use selected actual model.");
                 JsonNode? recommendation=null;
                 if(matched)
                 {
@@ -233,11 +239,11 @@ public static class BilingualRealInferenceSmoke
             var history=await db.LichSuTamTrangs.Where(x=>x.TaiKhoanID==account.TaiKhoanID && x.Source=="ai_va").ToListAsync();
             Check(history.Count>0 && history.All(x=>x.AnalysisLanguage is "vi" or "en" && x.AnalysisId is not null && x.VanBanDauVao is null),"Real provenance incomplete.");
             Check((await File.ReadAllTextAsync(viMarker)).Trim()==viVersion && (await File.ReadAllTextAsync(enMarker)).Trim()==enVersion,"Smoke altered active markers.");
-            Check((await File.ReadAllTextAsync(originalViMarker)).Trim()==viVersion&&(await File.ReadAllTextAsync(originalEnMarker)).Trim()==enVersion,"Production markers changed.");
+            if(!six)Check((await File.ReadAllTextAsync(originalViMarker)).Trim()==viVersion&&(await File.ReadAllTextAsync(originalEnMarker)).Trim()==enVersion,"Production markers changed.");
             var report=new {checkedAt=DateTimeOffset.UtcNow,coldStartupMs=coldStartup.Elapsed.TotalMilliseconds,qualityStatus="unlabelled_smoke_not_independent_quality_evaluation",
                 description="Existing public demo descriptions; no ground-truth VA or independently reviewed emotion labels.",
                 english=healthEn,vietnamese=healthVi,cases=results.Count,assertions=checks,burst,results};
-            var destination=Path.Combine(root,android?".local-build/ai-unification-phase3-bilingual-smoke.json":".local-build/ai-unification-phase2-bilingual-smoke.json");
+            var destination=Path.Combine(root,six?".local-build/khang-six-real-smoke.json":android?".local-build/ai-unification-phase3-bilingual-smoke.json":".local-build/ai-unification-phase2-bilingual-smoke.json");
             await File.WriteAllTextAsync(destination,JsonSerializer.Serialize(report,new JsonSerializerOptions(JsonSerializerDefaults.Web){WriteIndented=true}));
             Console.WriteLine($"PASS: {checks} real-model assertions, {results.Count} descriptions; {enVersion} + {viVersion}. Catalog copied to temporary DB. Quality metrics not claimed.");
             Console.WriteLine("Evidence: "+Path.GetRelativePath(root,destination));

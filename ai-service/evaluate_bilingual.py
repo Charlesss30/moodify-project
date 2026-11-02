@@ -33,7 +33,10 @@ def regression(gold, predicted):
             "rmse": math.sqrt(statistics.mean(e * e for e in errors)), "pearson": correlation}
 
 
-def score(rows, predictions, split="test"):
+def score(rows, predictions, split="test", taxonomy=None):
+    if taxonomy not in (None, "vsmec-seven-v1", "moodify-six-v1"):
+        raise ValueError("Unsupported evaluation taxonomy.")
+    labels = ("Sadness", "Enjoyment", "Love", "Anger", "Fear", "Surprise") if taxonomy == "moodify-six-v1" else LABELS
     if split not in ("validation", "test"):
         raise ValueError("Use validation for selection or test for independent reporting.")
     seen_ids, seen_text = set(), set()
@@ -72,20 +75,22 @@ def score(rows, predictions, split="test"):
         report = {"language": language, "modelVersion": model, "mappingVersion": mapping, "samples": len(pairs)}
         labelled = [(r, p) for r, p in pairs if r.get("emotion") is not None]
         if labelled:
-            if language != "vi" or any(r["emotion"] not in LABELS or p.get("emotion") not in LABELS for r, p in labelled):
-                raise ValueError("VSMEC emotion labels must match the seven-class Vietnamese schema.")
+            if (language != "vi" and taxonomy != "moodify-six-v1") or any(r["emotion"] not in labels or p.get("emotion") not in labels for r, p in labelled):
+                raise ValueError("Emotion labels must match the declared evaluation taxonomy.")
             confusion = Counter((r["emotion"], p["emotion"]) for r, p in labelled)
             f1 = []
-            for label in LABELS:
+            for label in labels:
                 tp = confusion[(label, label)]
                 fp = sum(v for (g, predicted), v in confusion.items() if g != label and predicted == label)
                 fn = sum(v for (g, predicted), v in confusion.items() if g == label and predicted != label)
                 f1.append(2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else 0.0)
             accepted = [(r, p) for r, p in labelled if p["accepted"]]
             report["classification"] = {
-                "labels": LABELS, "macroF1AllSevenLabels": statistics.mean(f1),
-                "support": {label: sum(r["emotion"] == label for r, _ in labelled) for label in LABELS},
-                "confusionMatrix": [[confusion[(g, p)] for p in LABELS] for g in LABELS],
+                "labels": labels, "macroF1": statistics.mean(f1),
+                ("macroF1AllSixLabels" if taxonomy == "moodify-six-v1" else "macroF1AllSevenLabels"): statistics.mean(f1),
+                "accuracy": sum(r["emotion"] == p["emotion"] for r, p in labelled) / len(labelled),
+                "support": {label: sum(r["emotion"] == label for r, _ in labelled) for label in labels},
+                "confusionMatrix": [[confusion[(g, p)] for p in labels] for g in labels],
                 "coverage": len(accepted) / len(labelled),
                 "selectiveAccuracy": sum(r["emotion"] == p["emotion"] for r, p in accepted) / len(accepted) if accepted else None,
             }
@@ -116,9 +121,10 @@ def main():
     parser.add_argument("--data", required=True)
     parser.add_argument("--predictions", required=True)
     parser.add_argument("--split", choices=("validation", "test"), default="test")
+    parser.add_argument("--taxonomy", choices=("vsmec-seven-v1", "moodify-six-v1"))
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
-    report = score(load_jsonl(args.data), load_jsonl(args.predictions), args.split)
+    report = score(load_jsonl(args.data), load_jsonl(args.predictions), args.split, taxonomy=args.taxonomy)
     report["datasetSha256"] = hashlib.sha256(Path(args.data).read_bytes()).hexdigest()
     report["predictionsSha256"] = hashlib.sha256(Path(args.predictions).read_bytes()).hexdigest()
     output = Path(args.out)

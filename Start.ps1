@@ -2,6 +2,7 @@
 # Usage: .\Start.ps1
 param(
     [switch]$WithoutAI,
+    [switch]$WithoutLegacyClassifier,
     [string]$ListenAddress = "127.0.0.1"
 )
 
@@ -11,4 +12,4 @@ if (-not (Test-Path -LiteralPath $runner)) {
     throw "Local service runner not found: $runner"
 }
 
-& $runner -Action Start -WithoutAI:$WithoutAI -ListenAddress $ListenAddress
+& $runner -Action Start -WithoutAI:$WithoutAI -WithoutLegacyClassifier:$WithoutLegacyClassifier -ListenAddress $ListenAddress

@@ -43,9 +43,8 @@ public sealed class BilingualPolicyService(MongoStore db)
             Id=language,Language=language,Version=BilingualMoodAnalysisService.PolicyVersion(language),Reason="Built-in baseline; all current moods."};
     public async Task<RegistryOperation> DraftAsync(BilingualPolicyInput input,int actor,CancellationToken ct)
     {
-        if(input.MoodIds.Count!=input.MoodIds.Distinct().Count() || input.MoodIds.Any(x=>x<1)
-            || (input.Language=="en" && input.MinimumConfidence!=0))
-            return new(400,new{message="Use unique stable mood IDs. Regression has no confidence threshold."});
+        if(input.MoodIds.Count!=input.MoodIds.Distinct().Count() || input.MoodIds.Any(x=>x<1))
+            return new(400,new{message="Use unique stable mood IDs. Confidence limits apply to classifiers; regression has no classification confidence."});
         var ids=(await db.TamTrangs.ToListAsync(ct)).Select(x=>x.TamTrangID).ToHashSet();
         if(input.MoodIds.Any(x=>!ids.Contains(x)))return new(400,new{message="Every policy mood must exist."});
         var draft=new BilingualPolicy{Id="va-policy-"+Guid.NewGuid().ToString("N"),Language=input.Language,

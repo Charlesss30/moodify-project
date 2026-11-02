@@ -1,0 +1,53 @@
+2026-11-01 05:19:15,462 - INFO - Device: cuda | AMP fp16: True | Output: /content/drive/MyDrive/train-KLCN/output_en_emotion_20261101_051915
+2026-11-01 05:19:15,651 - INFO - TensorFlow version 2.21.0 available.
+2026-11-01 05:19:15,654 - INFO - JAX version 0.11.1 available.
+2026-11-01 05:19:18,180 - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-11-01 05:19:22,802 - INFO - Loại 47 câu train trùng val/test hoặc trùng nhau.
+2026-11-01 05:19:35,012 - INFO - Kích thước: train=26008 | val=2000 | test=2000
+2026-11-01 05:19:35,020 - INFO - Phân bố nhãn train: {'Enjoyment': 5345, 'Sadness': 4663, 'Love': 4000, 'Fear': 4000, 'Anger': 4000, 'Surprise': 4000}
+2026-11-01 05:19:35,023 - INFO - Phân bố nhãn test : {'Enjoyment': 695, 'Sadness': 581, 'Anger': 275, 'Fear': 224, 'Love': 159, 'Surprise': 66}
+2026-11-01 05:19:35,025 - INFO - Đã lưu /content/drive/MyDrive/train-KLCN/moodify_emotion_en.csv (dùng cho Notebook 2).
+2026-11-01 05:20:05,179 - INFO - Epoch 1/4 step 100/813 | loss 1.7977 | acc 0.1688
+2026-11-01 05:20:16,876 - INFO - Epoch 1/4 step 200/813 | loss 1.4151 | acc 0.4059
+2026-11-01 05:20:28,651 - INFO - Epoch 1/4 step 300/813 | loss 1.1071 | acc 0.5524
+2026-11-01 05:20:40,553 - INFO - Epoch 1/4 step 400/813 | loss 0.9152 | acc 0.6382
+2026-11-01 05:20:52,617 - INFO - Epoch 1/4 step 500/813 | loss 0.7874 | acc 0.6927
+2026-11-01 05:21:09,392 - INFO - Epoch 1/4 step 600/813 | loss 0.6982 | acc 0.7314
+2026-11-01 05:21:21,453 - INFO - Epoch 1/4 step 700/813 | loss 0.6296 | acc 0.7598
+2026-11-01 05:21:33,780 - INFO - Epoch 1/4 step 800/813 | loss 0.5752 | acc 0.7817
+2026-11-01 05:21:35,419 - INFO - Epoch 1/4 step 813/813 | loss 0.5697 | acc 0.7841
+2026-11-01 05:21:37,192 - INFO - == Epoch 1 | val loss 0.2209 | val acc 0.9245 | val macro-F1 0.9027
+2026-11-01 05:21:41,020 - INFO - Lưu checkpoint tốt nhất (epoch 1, val acc 0.9245)
+2026-11-01 05:21:53,897 - INFO - Epoch 2/4 step 100/813 | loss 0.1646 | acc 0.9484
+2026-11-01 05:22:06,640 - INFO - Epoch 2/4 step 200/813 | loss 0.1669 | acc 0.9441
+2026-11-01 05:22:19,387 - INFO - Epoch 2/4 step 300/813 | loss 0.1685 | acc 0.9437
+2026-11-01 05:22:32,214 - INFO - Epoch 2/4 step 400/813 | loss 0.1665 | acc 0.9434
+2026-11-01 05:22:45,146 - INFO - Epoch 2/4 step 500/813 | loss 0.1624 | acc 0.9424
+2026-11-01 05:22:57,753 - INFO - Epoch 2/4 step 600/813 | loss 0.1563 | acc 0.9441
+2026-11-01 05:23:10,277 - INFO - Epoch 2/4 step 700/813 | loss 0.1548 | acc 0.9444
+2026-11-01 05:23:22,773 - INFO - Epoch 2/4 step 800/813 | loss 0.1512 | acc 0.9450
+2026-11-01 05:23:24,371 - INFO - Epoch 2/4 step 813/813 | loss 0.1510 | acc 0.9452
+2026-11-01 05:23:26,028 - INFO - == Epoch 2 | val loss 0.1523 | val acc 0.9335 | val macro-F1 0.9106
+2026-11-01 05:23:29,858 - INFO - Lưu checkpoint tốt nhất (epoch 2, val acc 0.9335)
+2026-11-01 05:23:43,897 - INFO - Epoch 3/4 step 100/813 | loss 0.1163 | acc 0.9563
+2026-11-01 05:23:58,213 - INFO - Epoch 3/4 step 200/813 | loss 0.1132 | acc 0.9559
+2026-11-01 05:24:11,209 - INFO - Epoch 3/4 step 300/813 | loss 0.1092 | acc 0.9577
+2026-11-01 05:24:23,863 - INFO - Epoch 3/4 step 400/813 | loss 0.1104 | acc 0.9570
+2026-11-01 05:24:36,476 - INFO - Epoch 3/4 step 500/813 | loss 0.1096 | acc 0.9569
+2026-11-01 05:24:48,951 - INFO - Epoch 3/4 step 600/813 | loss 0.1092 | acc 0.9566
+2026-11-01 05:25:01,643 - INFO - Epoch 3/4 step 700/813 | loss 0.1099 | acc 0.9556
+2026-11-01 05:25:14,414 - INFO - Epoch 3/4 step 800/813 | loss 0.1086 | acc 0.9556
+2026-11-01 05:25:16,087 - INFO - Epoch 3/4 step 813/813 | loss 0.1082 | acc 0.9556
+2026-11-01 05:25:17,751 - INFO - == Epoch 3 | val loss 0.1391 | val acc 0.9400 | val macro-F1 0.9170
+2026-11-01 05:25:19,762 - INFO - Lưu checkpoint tốt nhất (epoch 3, val acc 0.9400)
+2026-11-01 05:25:33,018 - INFO - Epoch 4/4 step 100/813 | loss 0.0871 | acc 0.9628
+2026-11-01 05:25:47,071 - INFO - Epoch 4/4 step 200/813 | loss 0.0922 | acc 0.9614
+2026-11-01 05:26:00,085 - INFO - Epoch 4/4 step 300/813 | loss 0.0922 | acc 0.9616
+2026-11-01 05:26:13,726 - INFO - Epoch 4/4 step 400/813 | loss 0.0909 | acc 0.9617
+2026-11-01 05:26:30,352 - INFO - Epoch 4/4 step 500/813 | loss 0.0919 | acc 0.9612
+2026-11-01 05:26:48,363 - INFO - Epoch 4/4 step 600/813 | loss 0.0917 | acc 0.9607
+2026-11-01 05:27:02,207 - INFO - Epoch 4/4 step 700/813 | loss 0.0910 | acc 0.9613
+2026-11-01 05:27:14,745 - INFO - Epoch 4/4 step 800/813 | loss 0.0909 | acc 0.9611
+2026-11-01 05:27:16,426 - INFO - Epoch 4/4 step 813/813 | loss 0.0904 | acc 0.9614
+2026-11-01 05:27:18,112 - INFO - == Epoch 4 | val loss 0.1450 | val acc 0.9395 | val macro-F1 0.9174
+2026-11-01 05:27:18,130 - INFO - Train xong. Best checkpoint: /content/drive/MyDrive/train-KLCN/output_en_emotion_20261101_051915/best_model

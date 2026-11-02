@@ -1,0 +1,49 @@
+{
+  "labels": [
+    "Sadness",
+    "Enjoyment",
+    "Love",
+    "Anger",
+    "Fear",
+    "Surprise"
+  ],
+  "id2label": {
+    "0": "Sadness",
+    "1": "Enjoyment",
+    "2": "Love",
+    "3": "Anger",
+    "4": "Fear",
+    "5": "Surprise"
+  },
+  "va_anchors": {
+    "Sadness": [
+      -0.8,
+      -0.6
+    ],
+    "Enjoyment": [
+      0.8,
+      0.7
+    ],
+    "Love": [
+      0.8,
+      0.3
+    ],
+    "Anger": [
+      -0.8,
+      0.8
+    ],
+    "Fear": [
+      -0.7,
+      0.9
+    ],
+    "Surprise": [
+      0.5,
+      0.9
+    ]
+  },
+  "model_name": "roberta-base",
+  "max_len": 64,
+  "test_accuracy": 0.9325,
+  "test_macro_f1": 0.9016774396172546,
+  "test_set": "dair-ai/emotion split=test (2000 câu, in-distribution)"
+}

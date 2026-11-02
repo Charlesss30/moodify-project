@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using System.IO.Compression;
@@ -86,6 +86,9 @@ public class ModelsController(
                 await ExtractVietnameseArtifactsAsync(entries, staging, maxExpandedBytes, ct);
             }
 
+            if (System.IO.File.Exists(Path.Combine(staging, "label_config.json")))
+                ValidateClassifierManifest(staging, version, "vi");
+
             System.IO.File.Delete(packagePath);
             Directory.Move(staging, destination);
             moved = true;
@@ -131,10 +134,15 @@ public class ModelsController(
             && files.Any(other => other.Name.Equals(string.Join('/', file.Segments[..^1].Append("model.safetensors")), StringComparison.OrdinalIgnoreCase)
                 || other.Name.Equals(string.Join('/', file.Segments[..^1].Append("pytorch_model.bin")), StringComparison.OrdinalIgnoreCase)));
         var stateDict = files.FirstOrDefault(file => file.Segments[^1].EndsWith(".pt", StringComparison.OrdinalIgnoreCase));
-        if (configEntry.Entry is null || !files.Any(file => file.Name.Equals(string.Join('/', configEntry.Segments[..^1].Append("tokenizer_config.json")), StringComparison.OrdinalIgnoreCase))
+        var labelConfig = files.Where(file => file.Segments[^1].Equals("label_config.json", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var preprocessingConfig = files.Where(file => file.Segments[^1].Equals("preprocessing.json", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var manifest = files.Where(file => file.Segments[^1].Equals("manifest.json", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var sixClass = labelConfig.Length > 0;
+        if (configEntry.Entry is null || (sixClass && (labelConfig.Length != 1 || preprocessingConfig.Length != 1 || manifest.Length != 1))
+            || !files.Any(file => file.Name.Equals(string.Join('/', configEntry.Segments[..^1].Append("tokenizer_config.json")), StringComparison.OrdinalIgnoreCase))
             || !files.Any(file => file.Name.Equals(string.Join('/', configEntry.Segments[..^1].Append("vocab.txt")), StringComparison.OrdinalIgnoreCase))
             || !files.Any(file => file.Name.Equals(string.Join('/', configEntry.Segments[..^1].Append("bpe.codes")), StringComparison.OrdinalIgnoreCase)))
-            throw new InvalidDataException("Required bundle: best_model/config.json, model.safetensors (or pytorch_model.bin), tokenizer_config.json, vocab.txt and bpe.codes. A .pt state dict can be included with these files.");
+            throw new InvalidDataException("Provide a complete PhoBERT model/tokenizer bundle. Six-class exports also require label_config.json, preprocessing.json and manifest.json.");
 
         var prefix = configEntry.Segments[..^1];
         var output = Path.Combine(staging, "model");
@@ -145,15 +153,20 @@ public class ModelsController(
             var inModel = file.Segments.Length > prefix.Length && prefix.SequenceEqual(file.Segments.Take(prefix.Length), StringComparer.OrdinalIgnoreCase);
             var isStateDict = !inModel && stateDict.Entry is not null && ReferenceEquals(file.Entry, stateDict.Entry)
                 && !files.Any(candidate => candidate.Segments[^1].Equals("model.safetensors", StringComparison.OrdinalIgnoreCase));
-            var isMetadata = file.Segments[^1] is "preprocessing.json" or "confidence_threshold.json";
+            var metadataName = file.Segments[^1];
+            var isMetadata = metadataName.Equals("preprocessing.json", StringComparison.OrdinalIgnoreCase)
+                || metadataName.Equals("confidence_threshold.json", StringComparison.OrdinalIgnoreCase)
+                || metadataName.Equals("label_config.json", StringComparison.OrdinalIgnoreCase)
+                || metadataName.Equals("manifest.json", StringComparison.OrdinalIgnoreCase);
             if (!inModel && !isStateDict && !isMetadata) continue;
             var relative = isStateDict ? "model.pt" : inModel ? Path.Combine(file.Segments[prefix.Length..]) : file.Segments[^1];
             if (relative.EndsWith(".pt", StringComparison.OrdinalIgnoreCase) && !isStateDict) continue;
             if (!(relative.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".safetensors", StringComparison.OrdinalIgnoreCase)
                 || relative.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)
                 || relative.EndsWith(".codes", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".model", StringComparison.OrdinalIgnoreCase))) continue;
-            var dest = Path.GetFullPath(Path.Combine(output, relative));
-            var outputRoot = Path.GetFullPath(output) + Path.DirectorySeparatorChar;
+            var destinationRoot = isMetadata && sixClass ? staging : output;
+            var dest = Path.GetFullPath(Path.Combine(destinationRoot, relative));
+            var outputRoot = Path.GetFullPath(destinationRoot) + Path.DirectorySeparatorChar;
             if (!dest.StartsWith(outputRoot, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Unsafe model artifact path.");
             if (!copiedNames.Add(relative)) throw new InvalidDataException("Archive contains duplicate model asset paths.");
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
@@ -254,51 +267,119 @@ public class ModelsController(
     private static async Task ProcessVaPackageEntriesAsync(List<VaPackageEntry> entries, string staging,
         string version, long maxExpandedBytes, CancellationToken ct)
     {
-            if (entries.Count is 0 or > 500)
-                throw new InvalidDataException("Archive must contain between 1 and 500 files.");
-            long expandedBytes = 0;
-            var checkpointEntries = new List<VaPackageEntry>();
-            var tokenizerEntries = new List<(VaPackageEntry Entry, string RelativePath)>();
-            foreach (var entry in entries)
-            {
-                if (entry.IsDirectory) continue;
-                expandedBytes = checked(expandedBytes + entry.Length);
-                if (expandedBytes > maxExpandedBytes)
-                    throw new InvalidDataException("Expanded package exceeds 3 GB safety limit.");
-                if (entry.IsSymbolicLink)
-                    throw new InvalidDataException("Package cannot contain symbolic links.");
+        if (entries.Count is 0 or > 500)
+            throw new InvalidDataException("Archive must contain between 1 and 500 files.");
+        long expandedBytes = 0;
+        var files = new List<(VaPackageEntry Entry, string[] Segments, string Name)>();
+        foreach (var entry in entries)
+        {
+            if (entry.IsDirectory) continue;
+            expandedBytes = checked(expandedBytes + entry.Length);
+            if (expandedBytes > maxExpandedBytes)
+                throw new InvalidDataException("Expanded package exceeds 3 GB safety limit.");
+            if (entry.IsSymbolicLink)
+                throw new InvalidDataException("Package cannot contain symbolic links.");
 
-                var name = entry.FullName.Replace('\\', '/');
-                var segments = name.Split('/', StringSplitOptions.RemoveEmptyEntries);
-                if (segments.Length == 0)
-                    throw new InvalidDataException("Package contains an empty file path.");
-                if (name.StartsWith('/') || segments.Any(part => part is "." or ".." || part.Contains(':')))
-                    throw new InvalidDataException("Package contains an unsafe file path.");
-                var fileName = segments[^1];
-                var tokenizerIndex = Array.FindIndex(segments, part => string.Equals(part, "tokenizer", StringComparison.OrdinalIgnoreCase));
-                if (fileName.EndsWith(".pt", StringComparison.OrdinalIgnoreCase) && tokenizerIndex < 0)
-                    checkpointEntries.Add(entry);
-                if (tokenizerIndex >= 0 && tokenizerIndex < segments.Length - 1)
-                    tokenizerEntries.Add((entry, Path.Combine(segments[(tokenizerIndex + 1)..])));
-            }
-
-            if (checkpointEntries.Count != 1 || !tokenizerEntries.Any(item =>
-                    string.Equals(item.RelativePath.Replace('\\', '/'), "tokenizer.json", StringComparison.OrdinalIgnoreCase)))
-                throw new InvalidDataException("Required: one .pt checkpoint plus tokenizer/tokenizer.json and tokenizer assets.");
-
-            var checkpointPath = Path.Combine(staging, version + ".pt");
-            await CopyPackageEntryAsync(checkpointEntries[0], checkpointPath, ct);
-            foreach (var (entry, relativePath) in tokenizerEntries)
-            {
-                var outputPath = Path.GetFullPath(Path.Combine(staging, "tokenizer", relativePath));
-                var tokenizerRoot = Path.GetFullPath(Path.Combine(staging, "tokenizer")) + Path.DirectorySeparatorChar;
-                if (!outputPath.StartsWith(tokenizerRoot, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("Package contains an unsafe tokenizer path.");
-                Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-                await CopyPackageEntryAsync(entry, outputPath, ct);
-            }
-
+            var name = entry.FullName.Replace('\\', '/');
+            var segments = name.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length == 0 || name.StartsWith('/') || segments.Any(part => part is "." or ".." || part.Contains(':')))
+                throw new InvalidDataException("Package contains an unsafe file path.");
+            files.Add((entry, segments, name));
         }
+
+        var labelConfig = files.Where(file => file.Segments[^1].Equals("label_config.json", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var manifest = files.Where(file => file.Segments[^1].Equals("manifest.json", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var classifierConfig = files.FirstOrDefault(file =>
+            file.Segments.Length >= 2
+            && file.Segments[^2].Equals("best_model", StringComparison.OrdinalIgnoreCase)
+            && file.Segments[^1].Equals("config.json", StringComparison.OrdinalIgnoreCase));
+        if (classifierConfig.Entry is not null)
+        {
+            var modelPrefix = classifierConfig.Segments[..^1];
+            bool HasModelFile(string fileName) => files.Any(file =>
+                file.Name.Equals(string.Join('/', modelPrefix.Append(fileName)), StringComparison.OrdinalIgnoreCase));
+            if (labelConfig.Length != 1 || manifest.Length != 1
+                || !HasModelFile("model.safetensors") || !HasModelFile("tokenizer.json"))
+                throw new InvalidDataException("Six-class English classifier package requires best_model/config.json, model.safetensors, tokenizer.json, label_config.json and manifest.json.");
+
+            var copied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in files)
+            {
+                var isModelFile = file.Segments.Length > modelPrefix.Length
+                    && modelPrefix.SequenceEqual(file.Segments.Take(modelPrefix.Length), StringComparer.OrdinalIgnoreCase);
+                var isMetadata = file.Segments[^1].Equals("label_config.json", StringComparison.OrdinalIgnoreCase)
+                    || file.Segments[^1].Equals("manifest.json", StringComparison.OrdinalIgnoreCase)
+                    || file.Segments[^1].Equals("confidence_threshold.json", StringComparison.OrdinalIgnoreCase);
+                if (!isModelFile && !isMetadata) continue;
+                var relative = isMetadata ? file.Segments[^1] : Path.Combine(file.Segments[modelPrefix.Length..]);
+                if (!copied.Add(relative)) throw new InvalidDataException("Package contains duplicate classifier artifact paths.");
+                var root = isMetadata ? staging : Path.Combine(staging, "best_model");
+                var destination = Path.GetFullPath(Path.Combine(root, relative));
+                var rootPrefix = Path.GetFullPath(root) + Path.DirectorySeparatorChar;
+                if (!destination.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Package contains an unsafe classifier artifact path.");
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                await CopyPackageEntryAsync(file.Entry, destination, ct);
+            }
+            ValidateClassifierManifest(staging, version, "en");
+            return;
+        }
+
+        var checkpointEntries = new List<VaPackageEntry>();
+        var tokenizerEntries = new List<(VaPackageEntry Entry, string RelativePath)>();
+        foreach (var file in files)
+        {
+            var fileName = file.Segments[^1];
+            var tokenizerIndex = Array.FindIndex(file.Segments, part => string.Equals(part, "tokenizer", StringComparison.OrdinalIgnoreCase));
+            if (fileName.EndsWith(".pt", StringComparison.OrdinalIgnoreCase) && tokenizerIndex < 0)
+                checkpointEntries.Add(file.Entry);
+            if (tokenizerIndex >= 0 && tokenizerIndex < file.Segments.Length - 1)
+                tokenizerEntries.Add((file.Entry, Path.Combine(file.Segments[(tokenizerIndex + 1)..])));
+        }
+
+        if (checkpointEntries.Count != 1 || !tokenizerEntries.Any(item =>
+                string.Equals(item.RelativePath.Replace('\\', '/'), "tokenizer.json", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidDataException("Required: one .pt checkpoint plus tokenizer/tokenizer.json and tokenizer assets.");
+
+        await CopyPackageEntryAsync(checkpointEntries[0], Path.Combine(staging, version + ".pt"), ct);
+        foreach (var (entry, relativePath) in tokenizerEntries)
+        {
+            var outputPath = Path.GetFullPath(Path.Combine(staging, "tokenizer", relativePath));
+            var tokenizerRoot = Path.GetFullPath(Path.Combine(staging, "tokenizer")) + Path.DirectorySeparatorChar;
+            if (!outputPath.StartsWith(tokenizerRoot, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Package contains an unsafe tokenizer path.");
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+            await CopyPackageEntryAsync(entry, outputPath, ct);
+        }
+        }
+
+    private static void ValidateClassifierManifest(string artifactRoot, string version, string language)
+    {
+        var manifestPath = Path.Combine(artifactRoot, "manifest.json");
+        if (!System.IO.File.Exists(manifestPath))
+            throw new InvalidDataException("Classifier package is missing its root manifest.json.");
+        System.Text.Json.JsonDocument manifest;
+        try
+        {
+            manifest = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(manifestPath));
+        }
+        catch (System.Text.Json.JsonException error)
+        {
+            throw new InvalidDataException("Classifier manifest.json is invalid.", error);
+        }
+        using (manifest)
+        {
+            var root = manifest.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !root.TryGetProperty("model_version", out var modelVersion)
+                || modelVersion.ValueKind != System.Text.Json.JsonValueKind.String
+                || modelVersion.GetString() != version
+                || !root.TryGetProperty("language", out var modelLanguage)
+                || modelLanguage.ValueKind != System.Text.Json.JsonValueKind.String
+                || modelLanguage.GetString() != language)
+                throw new InvalidDataException("Upload version and language must match the classifier manifest.");
+        }
+    }
 
     private static async Task CopyPackageEntryAsync(VaPackageEntry entry, string destination, CancellationToken ct)
     {

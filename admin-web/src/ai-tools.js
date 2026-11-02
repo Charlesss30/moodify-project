@@ -31,11 +31,11 @@ function section(host, name, title, body) {
 export async function mountPolicyTools(host) {
   const [data, pipelines] = await Promise.all([request('/AiPolicies'), request('/AiWorkspace/pipelines')])
   if (!host.isConnected) return
-  const { node, run } = section(host, 'policies', 'Bilingual VA policies', `<p>These policies control Mobile/Web. They choose stable mood IDs and may tighten the Vietnamese confidence gate. Model anchors and catalog VA stay separate. Approval invalidates old analysis receipts.</p>
+  const { node, run } = section(host, 'policies', 'Bilingual VA policies', `<p>These policies control Mobile/Web. They choose stable mood IDs and may tighten classifier confidence gates for either language. Model anchors and catalog VA stay separate. Approval invalidates old analysis receipts.</p>
     <details><summary>Create a reviewed policy candidate</summary><form data-policy-create>
-    <label class="field">Pipeline<select name="language"><option value="vi">Vietnamese PhoBERT</option><option value="en">English VA regression</option></select></label>
+    <label class="field">Pipeline<select name="language"><option value="vi">Vietnamese PhoBERT</option><option value="en">English model</option></select></label>
     <label class="field">Allowed moods<select name="moodIds" multiple size="7" required>${pipelines.moods.map(m => `<option selected value="${m.id}">${esc(m.name)} (#${m.id})</option>`).join('')}</select></label>
-    ${input('minimumConfidence', 'Additional VI minimum confidence (0 keeps the model threshold)', 'type="number" min="0" max="1" step="0.01" value="0" required')}
+    ${input('minimumConfidence', 'Additional classifier confidence (regression ignores this value)', 'type="number" min="0" max="1" step="0.01" value="0" required')}
     ${input('reason', 'Reason and review evidence', 'required minlength="10" maxlength="1000"')}
     <button class="primary-button" type="submit">Save candidate</button></form></details>
     ${table(['Language', 'Active policy', 'Revision', 'Actions'], data.active.map(a => `<tr>${cell(a.language)}${cell(a.version)}${cell(a.revision)}<td><button type="button" data-policy-reset="${a.language}">Restore baseline</button></td></tr>`))}
@@ -58,10 +58,10 @@ export async function mountPolicyTools(host) {
 export async function mountTypedTools(host, tab) {
   const [data, quality] = await Promise.all([request('/AiExperiments'), request('/ModelQuality')])
   if (!host.isConnected) return
-  let body = '<p>Separate schemas for seven-label VSMEC, English VA regression and explicit-rating MF. Source/review metadata and immutable splits are required. These controls do not reinterpret GoEmotions datasets.</p>'
+  let body = '<p>Separate schemas for six-emotion English/Vietnamese classifiers, legacy seven-label VSMEC, English VA regression and explicit-rating MF. Source/review metadata and immutable splits are required. These controls do not reinterpret GoEmotions datasets.</p>'
   if (tab === 'aiDatasets') body += `<details><summary>Register reviewed dataset</summary><form data-typed-dataset>
     ${input('name', 'Dataset name', 'required minlength="2" maxlength="100"')}
-    <label class="field">Task<select name="taskType"><option value="vsmec7">PhoBERT · VSMEC 7 classes</option><option value="va_regression">RoBERTa · VA regression</option><option value="recommender">Recommender · explicit ratings</option></select></label>
+    <label class="field">Task<select name="taskType"><option value="vsmec7">PhoBERT · VSMEC 7 classes</option><option value="va_regression">RoBERTa · VA regression</option><option value="emotion6_en">RoBERTa · 6 emotions (EN)</option><option value="emotion6_vi">PhoBERT · 6 emotions (VI)</option><option value="recommender">Recommender · explicit ratings</option></select></label>
     <label class="field">Purpose<select name="purpose"><option value="training">Training · train/validation/test</option><option value="evaluation">Independent evaluation · validation/test only</option></select></label>
     <label><input name="independentEvaluation" type="checkbox"> Held-out labels/source/splits were independently reviewed for evaluation; not model-generated gold.</label>
     ${input('source', 'Dataset source and permission to use it', 'required minlength="10" maxlength="1000"')}
@@ -83,7 +83,7 @@ export async function mountTypedTools(host, tab) {
   const { node, run } = section(host, 'typed', 'Datasets, training and evaluation by model type', body)
   const reload = () => mountTypedTools(host, tab)
   node.querySelector('[data-typed-dataset]')?.addEventListener('submit', run(async form => {
-    const values = Object.fromEntries(new FormData(form)); values.language = { vsmec7: 'vi', va_regression: 'en', recommender: 'none' }[values.taskType]
+    const values = Object.fromEntries(new FormData(form)); values.language = { vsmec7: 'vi', emotion6_vi: 'vi', emotion6_en: 'en', va_regression: 'en', recommender: 'none' }[values.taskType]
     values.independentEvaluation = form.elements.independentEvaluation.checked; values.rows = await file(form.elements.rows); await post('/AiExperiments/datasets', values); await reload()
   }))
   node.querySelector('[data-typed-job]')?.addEventListener('submit', run(async form => {
@@ -167,18 +167,22 @@ export async function mountQualityTools(host, kind) {
   const owner = host.firstElementChild
   const [data, experiments] = await Promise.all([request('/ModelQuality'), request('/AiExperiments')])
   if (!host.isConnected || host.firstElementChild !== owner) return
-  const task = kind === 'vi' ? 'vsmec7' : 'va_regression'
-  const candidates = experiments.jobs.filter(j => j.taskType === task && j.report && j.qualityPolicyId)
+  const tasks = kind === 'vi' ? ['vsmec7', 'emotion6_vi'] : ['va_regression', 'emotion6_en']
+  const candidates = experiments.jobs.filter(j => tasks.includes(j.taskType) && j.report && j.qualityPolicyId)
   const { node, run } = section(host, 'quality', 'Model promotion · reviewed quality evidence', `<p>${esc(data.evidenceScope)}</p>
     <p>Uploading stores a candidate. Activation and rollback verify its fingerprint against an approval. An existing loaded baseline stays available without being labelled independently validated.</p>
     <details><summary>Fix quality criteria before creating an evaluation job</summary><form data-quality-policy>
+    <label class="field">Model task<select name="taskType">${tasks.map(t=>`<option value="${t}">${esc(t)}</option>`).join('')}</select></label>
     ${input('minimumValidationSamples', 'Minimum validation samples', 'type="number" min="20" max="60000" value="50" required')}
     ${input('minimumTestSamples', 'Minimum test samples', 'type="number" min="20" max="60000" value="50" required')}
-    ${kind === 'vi' ? input('minimumMacroF1', 'Minimum macro-F1 (all 7 classes)', 'type="number" min="0" max="1" step="0.01" value="0.55" required') +
-      input('minimumCoverage', 'Minimum accepted coverage', 'type="number" min="0" max="1" step="0.01" value="0.20" required') +
-      input('minimumSelectiveAccuracy', 'Minimum accuracy on accepted samples', 'type="number" min="0" max="1" step="0.01" value="0.80" required') :
-      input('maximumMae', 'Maximum MAE on each VA axis', 'type="number" min="0.0001" max="2" step="0.01" value="0.40" required') +
-      input('maximumRmse', 'Maximum RMSE on each VA axis', 'type="number" min="0.0001" max="2" step="0.01" value="0.60" required')}
+    <div data-classifier-criteria>
+    ${input('minimumMacroF1', 'Minimum macro-F1 across every class', 'type="number" min="0" max="1" step="0.01" value="0.55" required')}
+    ${input('minimumCoverage', 'Minimum accepted coverage', 'type="number" min="0" max="1" step="0.01" value="0.20" required')}
+    ${input('minimumSelectiveAccuracy', 'Minimum accuracy on accepted samples', 'type="number" min="0" max="1" step="0.01" value="0.80" required')}
+    </div><div data-regression-criteria>
+    ${input('maximumMae', 'Maximum MAE on each VA axis', 'type="number" min="0.0001" max="2" step="0.01" value="0.40" required')}
+    ${input('maximumRmse', 'Maximum RMSE on each VA axis', 'type="number" min="0.0001" max="2" step="0.01" value="0.60" required')}
+    </div>
     ${input('reason', 'Protocol, baseline comparison and rationale for these criteria', 'required minlength="30" maxlength="2000"')}
     <p>Prefilled values are starting examples, not scientifically validated acceptance targets. Fix and document criteria before viewing test outcomes.</p>
     <button class="primary-button" type="submit">Save immutable quality policy</button></form></details>
@@ -190,9 +194,18 @@ export async function mountQualityTools(host, kind) {
     <button class="primary-button" type="submit">Check gate and record approval</button></form></details>
     ${table(['Version', 'Evidence scope', 'Policy', 'Bundle SHA-256', 'Reviewed at'], data.approvals.filter(a => a.kind === kind).map(a => '<tr>'+cell(a.version)+cell(a.mode)+cell(a.policyId||'Existing baseline')+cell(a.bundleSha256)+cell(a.createdAt)+'</tr>'))}`)
   const reload = () => node.isConnected ? mountQualityTools(host, kind) : Promise.resolve()
+  const policyForm = node.querySelector('[data-quality-policy]')
+  const showTaskCriteria = () => {
+    const regression = policyForm.elements.taskType.value === 'va_regression'
+    for (const [selector, visible] of [['[data-classifier-criteria]', !regression], ['[data-regression-criteria]', regression]]) {
+      const group = policyForm.querySelector(selector); group.hidden = !visible
+      group.querySelectorAll('input').forEach(control => { control.disabled = !visible })
+    }
+  }
+  policyForm.elements.taskType.addEventListener('change', showTaskCriteria); showTaskCriteria()
   node.querySelector('[data-quality-policy]').addEventListener('submit', run(async form => {
     const values = Object.fromEntries(new FormData(form))
-    for (const key of Object.keys(values)) if (key !== 'reason') values[key] = Number(values[key])
+    for (const key of Object.keys(values)) if (key !== 'reason' && key !== 'taskType') values[key] = Number(values[key])
     await post('/ModelQuality/policies', { ...values, kind }); await reload()
   }))
   node.querySelector('[data-quality-approve]').addEventListener('submit', run(async form => {

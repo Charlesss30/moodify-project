@@ -1,0 +1,22 @@
+{
+  "model_version": "roberta_base_moodify_6c_20261101_051915",
+  "language": "en",
+  "task": "6-class emotion classification; V/A derived from anchors",
+  "base_model": "roberta-base",
+  "training_date": "2026-11-01",
+  "weights_file": "best_model/model.safetensors",
+  "weights_sha256": "b28f6902afe7522b42a6ed1c1608a3337a1d085c6905ace96b8d2bf8019070b8",
+  "dataset": "dair-ai/emotion; official test split (2000, in-distribution)",
+  "dataset_license": "Dataset card reports license other; redistribution/use terms require review",
+  "test_accuracy": 0.9325,
+  "test_macro_f1": 0.9016774396172546,
+  "max_length": 64,
+  "confidence_threshold": null,
+  "confidence_threshold_status": "not provided; accepted remains null pending calibration",
+  "training_seed": 42,
+  "sample_counts": {
+    "train": 26008,
+    "validation": 2000,
+    "test": 2000
+  }
+}
